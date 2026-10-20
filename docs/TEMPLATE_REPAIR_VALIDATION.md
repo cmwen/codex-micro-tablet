@@ -68,12 +68,12 @@ reflect this requirement. Site source, GitHub Pages configuration, and release
 workflows were unchanged. Generated tracked `.astro` files were restored and
 untracked generated type declarations removed from the review diff.
 
-Content inspection also identified existing website limitations: navigation links
-use root-relative paths instead of the configured `/min-android-app-template`
-base, and the layout references `/src/styles.css`, which is absent from the
-static output. These source issues remain outside this dependency update, so a
-successful build does not establish working navigation or styling on GitHub
-Pages. No browser visual check or live Pages deployment was performed.
+The website's existing project-base links and stylesheet source path were also
+repaired in a follow-up Run. All four generated pages now link under
+`/min-android-app-template/`; each internal page link resolves to a generated file.
+The layout imports its CSS through Astro, and the bundled stylesheet references
+resolve to generated assets. These checks passed against the built HTML; no browser
+visual check or live Pages deployment was performed.
 
 The devcontainer configuration and setup script were checked statically; a container
 was not recreated. GitHub release publication and Pages deployment were not executed;
