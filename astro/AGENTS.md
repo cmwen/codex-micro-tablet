@@ -25,7 +25,7 @@ const REPO_NAME = 'your-repo-name';
 
 ## Local environment & expectations
 
-- Node: use Node 24 LTS (see `package.json` engines field). The site uses Astro v6 — prefer `npm ci` to get supported versions.
+- Node: use Node 24 LTS, >=24.0.0 (see `package.json` engines field; Astro itself requires >=22.22.0). The site uses Astro v7 — prefer `npm ci` to get supported versions.
 - Commands:
   - `npm ci` — install exact dependencies for CI
   - `npm install` — install locally for development

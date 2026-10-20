@@ -42,7 +42,7 @@ CI checks formatting without editing or committing source files, runs analysis a
 
 ## Optional website
 
-`astro/` contains an optional GitHub Pages documentation website. It is independent of the Android app and can be retained, customized, or removed. Use **Node 24 LTS** (Astro requires at least 22.12.0):
+`astro/` contains an optional GitHub Pages documentation website. It is independent of the Android app and can be retained, customized, or removed. Use **Node 24 LTS** (Astro 7 requires at least 22.22.0; this site requires Node >=24.0.0):
 
 ```bash
 cd astro

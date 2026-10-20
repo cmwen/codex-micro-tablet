@@ -2,7 +2,7 @@
 
 This folder contains an Astro-based documentation site for the repository, deployed to GitHub Pages.
 
-**Note**: This site uses Astro v6 and requires Node 24 LTS to run locally.
+**Note**: This site uses Astro v7 and requires Node >=24.0.0 (use Node 24 LTS) to run locally. Astro itself requires Node >=22.22.0.
 
 ## Quick Start
 

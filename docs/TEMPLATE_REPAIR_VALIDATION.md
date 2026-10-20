@@ -23,7 +23,9 @@ dependencies were removed.
 | Release APK without signing configuration | Failed as intended with an explicit list of missing signing properties |
 | `flutter build apk --release --no-pub` with disposable signing configuration | Passed; APK signature verified with Android `apksigner` |
 | `python3 scripts/checks/rename-regression.py` | Passed; disposable copy, interactive setup, repeated rename, analysis, tests, formatting, debug APK identity and launch activity |
-| Website `npm ci` / `npm run build` on Node 24 | Passed; final content rebuild also passed with telemetry disabled |
+| Website `npm ci` / `ASTRO_TELEMETRY_DISABLED=1 npm run build` | Passed on Node 24.12.0 / npm 11.6.2 with Astro 7.4.1; exactly four static pages |
+| Website `npm audit --json` | Passed; zero advisories across all severities, including development and optional dependencies |
+| Generated website content inspection | Passed; all 92 page-source text fragments, page links, titles, and shared navigation retained |
 | `actionlint` | Passed for all workflows |
 | Bash syntax and Python compilation checks | Passed |
 | Agent skill structure/symlink verifier | Passed; four remaining skills |
@@ -46,9 +48,32 @@ source or logs.
 
 ## Limits and follow-up
 
-The existing website dependency tree reported 14 npm audit advisories: one low,
-one moderate, eleven high, and one critical. No dependency upgrade or `npm audit fix`
-was included in this repair; the optional site needs a separate dependency audit.
+The website dependency follow-up on 20 October 2026 upgraded Astro from 6.1.9
+(to which the old manifest allowed updates via `^6.1.9`) to 7.4.1 (`^7.4.1`) and
+refreshed `astro/package-lock.json` through npm's supported dependency resolution.
+Key locked dependencies are Vite 8.3.4, Rolldown 1.2.14,
+`@astrojs/compiler-rs` 0.5.2, `@astrojs/markdown-satteri` 0.4.4, devalue 6.0.3,
+and cookie 2.0.1. No overrides, forced audit fixes, or advisory exclusions were
+used. After a clean `npm ci`, `npm audit --json` exited successfully with an empty
+`vulnerabilities` object and zero low, moderate, high, or critical advisories,
+resolving the previously reported 14 advisories. This reflects npm's advisory
+database at validation time.
+
+The static build passed with telemetry disabled. Inspection of the actual output
+confirmed exactly `index.html`, `about/index.html`, `install/index.html`, and
+`releases/index.html`, with all page-source text and page links retained. Astro 7
+requires Node >=22.22.0; the site's existing stricter Node >=24.0.0 engine remains
+valid, and CI still selects Node 24. The README and Astro documentation now
+reflect this requirement. Site source, GitHub Pages configuration, and release
+workflows were unchanged. Generated tracked `.astro` files were restored and
+untracked generated type declarations removed from the review diff.
+
+Content inspection also identified existing website limitations: navigation links
+use root-relative paths instead of the configured `/min-android-app-template`
+base, and the layout references `/src/styles.css`, which is absent from the
+static output. These source issues remain outside this dependency update, so a
+successful build does not establish working navigation or styling on GitHub
+Pages. No browser visual check or live Pages deployment was performed.
 
 The devcontainer configuration and setup script were checked statically; a container
 was not recreated. GitHub release publication and Pages deployment were not executed;
