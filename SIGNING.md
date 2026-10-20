@@ -1,203 +1,95 @@
-# Android App Signing Guide
+# Android release signing
 
-This guide explains how to sign your Android app for release.
+Debug builds work without release credentials:
 
-## Overview
+```bash
+flutter build apk --debug
+```
 
-Android requires all apps to be digitally signed with a certificate (keystore) before they can be installed. The same keystore must be used for all updates to your app. **If you lose your keystore, you cannot update your app on the Play Store.**
+Release APKs and App Bundles require a private signing key. Release builds fail
+if signing configuration is absent or incomplete; there is no debug-key fallback.
+Both release workflows require all four secrets before building. They never generate
+keys, expose passwords as outputs, or upload signing files as artifacts.
 
-This template provides three ways to handle signing:
+## Generate and back up a private key
 
-1. **Auto-Generate** - The pipeline generates a keystore automatically
-2. **Local Generation** - Use the provided script to create a keystore locally
-3. **Manual Setup** - Traditional keystore generation and secret configuration
-
-## Quick Start (Auto-Generate)
-
-The easiest way to get started is to let the pipeline handle keystore generation:
-
-1. **Trigger a release** by pushing a tag or using workflow dispatch
-2. **Download the `signing-credentials` artifact** from the workflow run
-3. **Run the persistence script** to save the credentials:
-   ```bash
-   ./scripts/signing/persist-credentials.sh ./signing-credentials.json
-   ```
-4. **Delete the credentials file** after persistence
-
-That's it! Future releases will automatically use the persisted keystore.
-
-## Local Generation (Interactive)
-
-If you prefer to generate the keystore locally:
+Install JDK 17, then run this helper in a private interactive terminal:
 
 ```bash
 ./scripts/signing/generate-keystore.sh
 ```
 
-This interactive script will:
-- Prompt for keystore details (passwords, certificate info)
-- Generate a secure keystore
-- Create the `key.properties` file for local builds
-- Optionally upload to GitHub Secrets
+Choose a new absolute path outside the repository, in an existing private directory.
+The helper refuses to overwrite files. Java keytool prompts for passwords and
+certificate details directly; passwords do not appear in command arguments. It
+creates a JKS keystore with permissions restricted to its owner, without writing
+password files or uploading anything.
 
-## Manual Setup (Advanced)
+Keep an encrypted backup of the keystore and store its passwords in a password
+manager. Retain the same signing identity for application updates. With Play App
+Signing, distinguish your upload key from Google's app signing key and follow
+Google Play's recovery process if an upload key is lost. Repository secrets are
+build inputs, not a downloadable backup.
 
-### Step 1: Generate a Keystore
+## Local release builds
 
-```bash
-keytool -genkey -v \
-  -keystore release-keystore.jks \
-  -storepass YOUR_STORE_PASSWORD \
-  -alias release \
-  -keypass YOUR_KEY_PASSWORD \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000 \
-  -dname "CN=Your App, OU=Mobile, O=Your Company, L=City, ST=State, C=US"
-```
+Create the ignored `android/key.properties` privately with permissions `600`:
 
-### Step 2: Create key.properties (for local builds)
-
-Create `android/key.properties`:
 ```properties
+storeFile=/absolute/private/path/my-app.jks
 storePassword=YOUR_STORE_PASSWORD
-keyPassword=YOUR_KEY_PASSWORD
 keyAlias=release
-storeFile=release-keystore.jks
+keyPassword=YOUR_KEY_PASSWORD
 ```
 
-### Step 3: Add GitHub Secrets (for CI/CD)
-
-1. Base64 encode the keystore:
-   ```bash
-   # macOS
-   base64 -i release-keystore.jks | pbcopy
-   
-   # Linux
-   base64 -w 0 release-keystore.jks
-   ```
-
-2. Go to your repository: **Settings → Secrets and variables → Actions**
-
-3. Add these secrets:
-   - `ANDROID_KEYSTORE_BASE64` - The base64-encoded keystore
-   - `ANDROID_KEYSTORE_PASSWORD` - Your keystore password
-   - `ANDROID_KEY_ALIAS` - `release` (or your chosen alias)
-   - `ANDROID_KEY_PASSWORD` - Your key password
-
-## Persisting Auto-Generated Credentials
-
-If you used auto-generation and need to persist the credentials:
-
-### Using the Script (Recommended)
+`storeFile` may be absolute (recommended); relative paths resolve from
+`android/app`. Use Java properties escaping for backslashes, leading spaces, and
+non-ASCII characters. Keep the file out of source control and shared logs.
 
 ```bash
-# Download and extract the signing-credentials artifact
-unzip signing-credentials-*.zip
-
-# Run the persistence script
-./scripts/signing/persist-credentials.sh ./signing-credentials.json
-
-# Clean up
-rm -rf signing-credentials* signing-credentials.json
+flutter build apk --release
+flutter build appbundle --release
 ```
 
-### Manual Persistence
+Gradle verifies all four local properties and that the keystore exists. Android's
+signing task then validates the actual alias and passwords.
 
-1. Download the `signing-credentials` artifact from the workflow run
-2. Extract the ZIP file
-3. Open `signing-credentials.json`
-4. Go to **Settings → Secrets and variables → Actions**
-5. Add each value as a repository secret:
-   - `ANDROID_KEYSTORE_BASE64`
-   - `ANDROID_KEYSTORE_PASSWORD`
-   - `ANDROID_KEY_ALIAS`
-   - `ANDROID_KEY_PASSWORD`
+## GitHub release workflows
 
-## How It Works
+In **Settings → Secrets and variables → Actions**, configure all four repository
+secrets. Use environment secrets only if you also configure the workflow's environment.
 
-### The Signing Action
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64 encoding of your existing private keystore |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | Key alias selected during key generation |
+| `ANDROID_KEY_PASSWORD` | Key password (explicitly set even if it equals the store password) |
 
-The template includes a composite GitHub Action (`.github/actions/setup-signing`) that:
+Encode privately without printing the result to a terminal or CI log. For example,
+inside a private directory outside the repository:
 
-1. **Checks for secrets** - If `ANDROID_KEYSTORE_BASE64` is provided, uses it
-2. **Auto-generates if missing** - Creates a new keystore with secure random password
-3. **Creates key.properties** - Configures Gradle to use the keystore
-4. **Outputs credentials** - For auto-generated keystores, outputs the credentials for persistence
-
-### Workflow Integration
-
-Both `release.yml` and `pre-release.yml` use this action:
-
-```yaml
-- name: Setup Android Signing
-  id: signing
-  uses: ./.github/actions/setup-signing
-  with:
-    keystore_base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-    keystore_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-    key_alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-    key_password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+```bash
+umask 077
+base64 < /absolute/private/path/my-app.jks > keystore.base64
 ```
 
-If secrets aren't provided, the action generates a keystore and the workflow uploads the credentials as an artifact.
+Copy the encoded content into the secret field using a private editor, then remove
+the temporary base64 file. Base64 is encoding, not encryption. Do not commit it,
+attach it to a release, or upload it as an artifact.
 
-## Security Best Practices
-
-### Do
-
-- ✅ Back up your keystore in multiple secure locations
-- ✅ Use strong, unique passwords
-- ✅ Store secrets only in GitHub Secrets or secure vaults
-- ✅ Delete credential files after persisting them
-- ✅ Use the `.gitignore` entries provided (already configured)
-
-### Don't
-
-- ❌ Commit keystore files to version control
-- ❌ Share keystore passwords via insecure channels
-- ❌ Use the same keystore for multiple apps (unless they need to be signed together)
-- ❌ Store credentials in plain text files
-
-## Backup Recommendations
-
-The keystore is **critical** for app updates. If lost, you cannot update your app. Back it up:
-
-1. **Encrypted cloud storage** (Google Drive, Dropbox with encryption)
-2. **Password manager** (1Password, Bitwarden - store keystore as attachment)
-3. **Hardware backup** (encrypted USB drive in secure location)
-4. **GitHub Secrets** (automatically backed up as part of your repository)
+The signing action validates all four inputs, decodes the keystore into a private
+runner temporary directory, and creates an escaped `android/key.properties` for
+Gradle. The workflows remove those files in an `always()` cleanup step. Only APK
+and AAB files are published. No credential download or persistence step is needed.
 
 ## Troubleshooting
 
-### "No secrets found" but I added them
-
-- Ensure secret names match exactly: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, etc.
-- Check that secrets are repository secrets, not environment secrets (unless using environments)
-
-### Build succeeds but APK isn't signed
-
-- Verify `key.properties` is being created correctly
-- Check that `storeFile` path is correct in key.properties
-- Look at build logs for signing-related messages
-
-### "Keystore was tampered with" error
-
-- Password might be incorrect
-- Keystore file might be corrupted
-- Try re-encoding the keystore to base64
-
-### Auto-generated keystore not working on subsequent runs
-
-- You need to persist the credentials to GitHub Secrets
-- Download the `signing-credentials` artifact and run the persistence script
-- Or manually copy values to GitHub Secrets
-
-## Related Files
-
-- `.github/actions/setup-signing/action.yml` - Composite action for signing setup
-- `.github/workflows/release.yml` - Release workflow
-- `.github/workflows/pre-release.yml` - Pre-release workflow
-- `scripts/signing/generate-keystore.sh` - Local keystore generation script
-- `scripts/signing/persist-credentials.sh` - Credentials persistence script
-- `android/app/build.gradle.kts` - Gradle signing configuration
+- **Missing signing configuration:** check that every property or secret listed
+  above has a nonempty value. Debug builds remain available without release setup.
+- **Keystore not found:** verify the absolute `storeFile` path and file permissions.
+- **Invalid keystore or password:** confirm the original keystore, its alias, and
+  both passwords privately. Re-encode the original file for CI if needed.
+- **Updates rejected:** confirm the application ID and signing certificate match
+  the previously distributed app. Do not replace an established release key with a
+  newly generated key.

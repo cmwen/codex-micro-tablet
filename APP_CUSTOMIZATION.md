@@ -194,7 +194,7 @@ Save design to docs/UX_DESIGN.md
 For each category, please:
 - Recommend top 3 packages with pros/cons
 - Check latest version and maintenance status
-- Verify compatibility with Flutter 3.10+
+- Verify compatibility with Flutter 3.38.7
 - Consider package size and performance
 - Check license compatibility
 
@@ -246,7 +246,7 @@ After implementation:
 3. Run flutter analyze
 4. Run flutter test
 5. Document any public APIs
-6. Code formatting is handled automatically by CI
+6. Run `dart format .` locally; CI verifies formatting without committing changes
 ```
 
 ### Step 9: Create Release Build

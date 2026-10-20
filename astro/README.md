@@ -2,13 +2,13 @@
 
 This folder contains an Astro-based documentation site for the repository, deployed to GitHub Pages.
 
-**Note**: This site uses Astro v5.15 and requires Node 18+ to run locally.
+**Note**: This site uses Astro v6 and requires Node 24 LTS to run locally.
 
 ## Quick Start
 
 ```bash
 cd astro
-npm install
+npm ci
 npm run dev      # Local development
 npm run build    # Generate dist/
 npm run preview  # Preview build
@@ -30,7 +30,7 @@ Your site will be deployed to: `https://your-username.github.io/your-repo-name/`
 - Small Startlight-inspired theme (dark, readable, fast)
 - Minimal pages: Home, About, Install, Releases
 - Auto-deploy to GitHub Pages via `.github/workflows/deploy-website.yml`
-- Published when a GitHub Release is created (or via manual workflow dispatch)
+- Published after successful release workflow completion, a published release event, or manual workflow dispatch
 
 ## Flutter Project Commands
 
@@ -43,11 +43,12 @@ flutter pub get
 # Run in development
 flutter run
 
-# Build for release
-flutter build apk         # Android
-flutter build appbundle   # Play Store
-flutter build ios         # iOS
-flutter build web         # Web
+# Build a developer APK
+flutter build apk --debug
+
+# After configuring private release signing (see ../SIGNING.md):
+flutter build apk --release  # Signed Android APK
+flutter build appbundle      # Signed Play Store bundle
 ```
 
 ## Releases

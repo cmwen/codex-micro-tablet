@@ -5,9 +5,10 @@ This document outlines all the tools you need to install before using this templ
 ## Quick Checklist
 
 - [ ] Java 17+ (OpenJDK or Oracle JDK)
-- [ ] Flutter SDK 3.10.1+
+- [ ] Flutter SDK 3.38.7 (includes Dart 3.10.7)
 - [ ] Android Studio (for Android SDK and emulator)
 - [ ] Git
+- [ ] Python 3 (setup and rename regression scripts)
 - [ ] VS Code with GitHub Copilot (recommended)
 
 ---
@@ -51,37 +52,35 @@ java -version
 
 ---
 
-### 2. Flutter SDK 3.10.1+
+### 2. Flutter SDK 3.38.7 (includes Dart 3.10.7)
 
 **Why?** The framework used to build the Android app.
 
 #### macOS
 
 ```bash
-# Using Homebrew
-brew install flutter
+# Use the pinned SDK below; a package manager may install a different version.
 
 # Or manual installation
 cd ~/development
-git clone https://github.com/flutter/flutter.git -b stable
+git clone --branch 3.38.7 --depth 1 https://github.com/flutter/flutter.git
 export PATH="$PATH:`pwd`/flutter/bin"
 ```
 
 #### Windows
 
-1. Download from [flutter.dev](https://docs.flutter.dev/get-started/install/windows)
+1. Download Flutter **3.38.7** from the [SDK archive](https://docs.flutter.dev/install/archive)
 2. Extract to `C:\development\flutter`
 3. Add to PATH: `C:\development\flutter\bin`
 
 #### Linux
 
 ```bash
-# Using snap (recommended)
-sudo snap install flutter --classic
+# Use the pinned SDK below for a reproducible toolchain.
 
 # Or manual installation
 cd ~/development
-git clone https://github.com/flutter/flutter.git -b stable
+git clone --branch 3.38.7 --depth 1 https://github.com/flutter/flutter.git
 export PATH="$PATH:$HOME/development/flutter/bin"
 ```
 
@@ -89,7 +88,7 @@ export PATH="$PATH:$HOME/development/flutter/bin"
 
 ```bash
 flutter --version
-# Expected: Flutter 3.x.x
+# Expected: Flutter 3.38.7, Dart 3.10.7
 
 flutter doctor
 # Should show all green checkmarks for Android
@@ -104,7 +103,7 @@ flutter doctor
 1. Download from [developer.android.com/studio](https://developer.android.com/studio)
 2. Install and run Android Studio
 3. Complete the setup wizard (downloads Android SDK)
-4. Install at least one Android SDK Platform (API 33+ recommended)
+4. Install Android SDK Platform 36 and accept the Android SDK licenses
 5. (Optional) Create an Android Virtual Device (AVD) for testing
 
 #### Verify Android SDK
@@ -239,7 +238,7 @@ Run these commands to verify your setup is complete:
 ```bash
 # Check all tools
 java -version          # Should show 17.x.x
-flutter --version      # Should show 3.10.1+
+flutter --version      # Should show Flutter 3.38.7 / Dart 3.10.7
 git --version          # Any recent version
 flutter doctor         # All checks should pass
 
@@ -247,7 +246,7 @@ flutter doctor         # All checks should pass
 cd your-app-folder
 flutter pub get        # Should complete without errors
 flutter analyze        # Should pass
-flutter test           # Should pass (1 test)
+flutter test           # Should pass
 ```
 
 ---

@@ -24,60 +24,77 @@ jobs:
     name: Build & Release
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    
+
     steps:
     - uses: actions/checkout@v6
-    
+
     - name: Determine version
       id: version
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REF_TYPE: ${{ github.ref_type }}
+        REF_NAME: ${{ github.ref_name }}
+        INPUT_VERSION: ${{ inputs.version }}
+        RUN_NUMBER: ${{ github.run_number }}
       run: |
-        if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
-          # Extract version from tag (remove 'v' prefix if present)
-          TAG_VERSION="${{ github.ref_name }}"
-          VERSION="${TAG_VERSION#v}"
-          echo "source=tag" >> "$GITHUB_OUTPUT"
-        elif [[ -n "${{ inputs.version }}" ]]; then
-          # Use manually provided version
-          VERSION="${{ inputs.version }}"
-          VERSION="${VERSION#v}"
-          echo "source=input" >> "$GITHUB_OUTPUT"
+        set -euo pipefail
+        if [[ "$EVENT_NAME" == push && "$REF_TYPE" == tag ]]; then
+          VERSION="$REF_NAME"
+          SOURCE=tag
+        elif [[ -n "$INPUT_VERSION" ]]; then
+          VERSION="$INPUT_VERSION"
+          SOURCE=input
         else
-          # Extract version from pubspec.yaml
-          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
-          echo "source=pubspec" >> "$GITHUB_OUTPUT"
+          VERSION=$(sed -n 's/^version: *//p' pubspec.yaml)
+          SOURCE=pubspec
         fi
-        
-        # Extract build number (versionCode) - increment based on run number if not from tag
-        if [[ "$VERSION" == *"+"* ]]; then
-          BUILD_NUMBER="${VERSION#*+}"
+        VERSION="${VERSION#v}"
+        if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9]+)?$ ]]; then
+          echo '::error::Version must be major.minor.patch with optional prerelease and numeric +build suffix.'
+          exit 1
+        fi
+        BUILD_NUMBER="$RUN_NUMBER"
+        if [[ "$VERSION" == *+* ]]; then
+          BUILD_NUMBER="${VERSION##*+}"
           VERSION="${VERSION%+*}"
-        else
-          BUILD_NUMBER="${{ github.run_number }}"
         fi
-        
+        if [[ ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+          echo '::error::Build number must be a positive integer.'
+          exit 1
+        fi
+        echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
         echo "tag_name=v$VERSION" >> "$GITHUB_OUTPUT"
-        echo "Using version: $VERSION+$BUILD_NUMBER"
-    
+
+    # Releases require all four private signing secrets; no credentials are generated.
+    - name: Setup Android Signing
+      id: signing
+      uses: ./.github/actions/setup-signing
+      with:
+        keystore_base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        keystore_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        key_alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+        key_password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
     - name: Setup Java
       uses: actions/setup-java@v5
       with:
         distribution: 'temurin'
         java-version: '17'
         cache: 'gradle'
-    
+
     # Use CI-optimized Gradle properties
     - name: Setup Gradle for CI
       run: cp android/gradle-ci.properties android/gradle.properties
-    
+
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.38.3'
+        flutter-version: '3.38.7'
         channel: 'stable'
         cache: true
-    
+
     # Cache pub dependencies for faster builds
     - name: Cache Flutter packages
       uses: actions/cache@v5
@@ -88,149 +105,73 @@ jobs:
         key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
         restore-keys: |
           ${{ runner.os }}-pub-
-    
+
     - name: Get dependencies
       run: flutter pub get
-    
+
     - name: Run tests
       run: flutter test --concurrency=$(nproc)
-    
-    # Setup Android signing - auto-generates keystore if secrets not provided
-    - name: Setup Android Signing
-      id: signing
-      uses: ./.github/actions/setup-signing
-      with:
-        keystore_base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        keystore_password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        key_alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-        key_password: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        app_name: 'Min Android Template'
-        organization: 'Development'
-    
+
     - name: Build signed APK
-      run: flutter build apk --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ steps.version.outputs.build_number }}
-    
+      env:
+        BUILD_VERSION: ${{ steps.version.outputs.version }}
+        BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+      run: flutter build apk --release --build-name="$BUILD_VERSION" --build-number="$BUILD_NUMBER"
+
     - name: Build signed App Bundle
-      run: flutter build appbundle --release --build-name=${{ steps.version.outputs.version }} --build-number=${{ steps.version.outputs.build_number }}
-    
+      env:
+        BUILD_VERSION: ${{ steps.version.outputs.version }}
+        BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+      run: flutter build appbundle --release --build-name="$BUILD_VERSION" --build-number="$BUILD_NUMBER"
+
     # Rename artifacts with version suffix
     - name: Rename artifacts
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+        BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
       run: |
-        VERSION="${{ steps.version.outputs.version }}"
-        BUILD_NUMBER="${{ steps.version.outputs.build_number }}"
-        APP_NAME="min-android-template"
-        
+        set -euo pipefail
+        APP_NAME=min-android-template
         mkdir -p build/artifacts
         cp build/app/outputs/flutter-apk/app-release.apk \
-           build/artifacts/${APP_NAME}-${VERSION}+${BUILD_NUMBER}.apk
+           "build/artifacts/${APP_NAME}-${VERSION}+${BUILD_NUMBER}.apk"
         cp build/app/outputs/bundle/release/app-release.aab \
-           build/artifacts/${APP_NAME}-${VERSION}+${BUILD_NUMBER}.aab
-    
+           "build/artifacts/${APP_NAME}-${VERSION}+${BUILD_NUMBER}.aab"
+
     - name: Upload release artifacts
       uses: actions/upload-artifact@v7
       with:
         name: release-${{ steps.version.outputs.version }}
         path: build/artifacts/*
         retention-days: 90
-    
-    # Save auto-generated signing credentials for persistence
-    - name: Save signing credentials for persistence
-      if: steps.signing.outputs.is_auto_generated == 'true'
-      run: |
-        mkdir -p build/signing-credentials
-        cat > build/signing-credentials/signing-credentials.json << EOF
-        {
-          "keystore_base64": "${{ steps.signing.outputs.keystore_base64 }}",
-          "keystore_password": "${{ steps.signing.outputs.keystore_password }}",
-          "key_alias": "${{ steps.signing.outputs.key_alias }}",
-          "key_password": "${{ steps.signing.outputs.key_password }}"
-        }
-        EOF
-        
-        cat > build/signing-credentials/README.md << 'EOF'
-        # Auto-Generated Signing Credentials
-        
-        Your app was signed with an auto-generated keystore. To use the same keystore
-        for future releases (required for app updates), you need to persist these
-        credentials to GitHub Secrets.
-        
-        ## Quick Setup (Recommended)
-        
-        1. Download and extract this artifact
-        2. Run the persistence script:
-           ```bash
-           ./scripts/signing/persist-credentials.sh ./signing-credentials.json
-           ```
-        
-        ## Manual Setup
-        
-        If you prefer to set secrets manually:
-        
-        1. Go to your repository Settings → Secrets and variables → Actions
-        2. Add these repository secrets:
-           - `ANDROID_KEYSTORE_BASE64`: Copy the value from signing-credentials.json
-           - `ANDROID_KEYSTORE_PASSWORD`: Copy the password from signing-credentials.json
-           - `ANDROID_KEY_ALIAS`: Copy the alias from signing-credentials.json
-           - `ANDROID_KEY_PASSWORD`: Copy the key password from signing-credentials.json
-        
-        ## ⚠️ Important
-        
-        - **Back up this file securely** - losing it means you can't update your app
-        - **Delete this file after persisting** - it contains sensitive credentials
-        - Future releases will automatically use the persisted secrets
-        EOF
-    
-    - name: Upload signing credentials
-      if: steps.signing.outputs.is_auto_generated == 'true'
-      uses: actions/upload-artifact@v7
-      with:
-        name: signing-credentials-${{ steps.version.outputs.version }}
-        path: build/signing-credentials/*
-        retention-days: 7
-    
-    - name: Notice about auto-generated keystore
-      if: steps.signing.outputs.is_auto_generated == 'true'
-      run: |
-        echo ""
-        echo "╔═══════════════════════════════════════════════════════════════════════════════════╗"
-        echo "║                                                                                   ║"
-        echo "║  ⚠️  IMPORTANT: Auto-Generated Keystore                                           ║"
-        echo "║                                                                                   ║"
-        echo "║  Your app was signed with an auto-generated keystore. To update your app         ║"
-        echo "║  in the future, you MUST persist this keystore to GitHub Secrets.                ║"
-        echo "║                                                                                   ║"
-        echo "║  Steps:                                                                           ║"
-        echo "║  1. Download the 'signing-credentials' artifact from this workflow run           ║"
-        echo "║  2. Run: ./scripts/signing/persist-credentials.sh ./signing-credentials.json     ║"
-        echo "║  3. Delete the downloaded credentials file                                       ║"
-        echo "║                                                                                   ║"
-        echo "║  See the artifact README.md for detailed instructions.                           ║"
-        echo "║                                                                                   ║"
-        echo "╚═══════════════════════════════════════════════════════════════════════════════════╝"
-        echo ""
-    
+
     - name: Create and push tag
       if: github.event_name == 'workflow_dispatch' && inputs.create_tag && steps.version.outputs.source != 'tag'
+      env:
+        RELEASE_TAG: ${{ steps.version.outputs.tag_name }}
+        RELEASE_VERSION: ${{ steps.version.outputs.version }}
       run: |
         git config user.name github-actions
         git config user.email github-actions@github.com
-        git tag -a "${{ steps.version.outputs.tag_name }}" -m "Release ${{ steps.version.outputs.version }}"
-        git push origin "${{ steps.version.outputs.tag_name }}"
-    
+        git tag -a "$RELEASE_TAG" -m "Release $RELEASE_VERSION"
+        git push origin "$RELEASE_TAG"
+
     - name: Publish GitHub Release
       if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.create_tag)
       uses: softprops/action-gh-release@v3
       with:
         name: ${{ steps.version.outputs.tag_name }}
         tag_name: ${{ steps.version.outputs.tag_name }}
+        target_commitish: ${{ github.sha }}
         files: build/artifacts/*
         generate_release_notes: true
-        body: |
-          ${{ steps.signing.outputs.is_auto_generated == 'true' && '> ⚠️ **Note:** This release was signed with an auto-generated keystore. Download the `signing-credentials` artifact and run the persistence script to use the same keystore for future releases.' || '' }}
-    
+
     - name: Clean up signing files
       if: always()
+      env:
+        SIGNING_DIRECTORY: ${{ steps.signing.outputs.signing_directory }}
       run: |
-        rm -f android/app/release-keystore.jks
         rm -f android/key.properties
-        rm -rf build/signing-credentials
+        if [[ -n "$SIGNING_DIRECTORY" ]]; then
+          rm -rf -- "$SIGNING_DIRECTORY"
+        fi

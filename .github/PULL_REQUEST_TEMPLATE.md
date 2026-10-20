@@ -20,7 +20,7 @@ Brief description of the changes in this PR.
 - [ ] Changes are minimal and focused
 - [ ] Backward compatible (or breaking changes noted)
 
-> **Note**: Code formatting is automatically applied by CI. You don't need to run `dart format` manually.
+> **Note**: Run `dart format .` locally. CI verifies formatting without changing or committing files.
 
 ## Testing
 

@@ -1,5 +1,4 @@
 import java.util.Properties
-import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
@@ -8,29 +7,36 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// =============================================================================
-// RELEASE SIGNING CONFIGURATION
-// =============================================================================
-// To sign release builds, create a file `android/key.properties` with:
-//
-//   storePassword=your_keystore_password
-//   keyPassword=your_key_password
-//   keyAlias=your_key_alias
-//   storeFile=path/to/your-keystore.jks
-//
-// For CI/CD, these are set via GitHub Secrets:
-//   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
-//   ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
-//
-// AI PROMPT: To set up signing, ask AI to help you:
-//   1. Generate a keystore: keytool -genkey -v -keystore release.jks ...
-//   2. Create key.properties file
-//   3. Add secrets to GitHub repository settings
-// =============================================================================
+// Local releases use private android/key.properties; CI prepares it from four
+// explicitly configured repository secrets. Debug builds need no release key.
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+val requiredSigningProperties = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val missingSigningProperties = requiredSigningProperties.filter {
+    keystoreProperties.getProperty(it).isNullOrBlank()
+}
+val releaseKeystore = keystoreProperties.getProperty("storeFile")
+    ?.takeIf { it.isNotBlank() }?.let { file(it) }
+val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    doLast {
+        check(missingSigningProperties.isEmpty()) {
+            "Release signing requires android/key.properties with: " +
+                missingSigningProperties.joinToString(", ") +
+                ". Configure a private release key; see SIGNING.md. Use --debug for development."
+        }
+        check(releaseKeystore?.isFile == true) {
+            "Release signing keystore does not exist. Check storeFile in android/key.properties."
+        }
+    }
+}
+// Cover both normal release builds and direct signing validation tasks.
+tasks.configureEach {
+    if (name == "preReleaseBuild" || name == "validateSigningRelease") {
+        dependsOn(verifyReleaseSigning)
+    }
 }
 
 android {
@@ -69,7 +75,7 @@ android {
     }
 
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
+        if (missingSigningProperties.isEmpty()) {
             create("release") {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
@@ -90,15 +96,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt")
             )
-            // Use release signing config if available, otherwise fall back to debug
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

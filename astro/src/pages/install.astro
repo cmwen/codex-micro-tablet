@@ -11,11 +11,10 @@ import BaseLayout from '../layouts/BaseLayout.astro'
     <div class="card">
       <h3>Prerequisites</h3>
       <ul>
-        <li>Flutter SDK 3.10.1 or higher</li>
-        <li>Dart 3.10.1 or higher</li>
+        <li>Flutter SDK 3.38.7 (pinned and tested)</li>
+        <li>Dart 3.10.7 (bundled with Flutter)</li>
         <li>For Android: Android Studio or Android SDK</li>
-        <li>For iOS: Xcode (macOS only)</li>
-        <li>Node 18+ (for the website, not required for the app)</li>
+        <li>Node 24 LTS (for the website, not required for the app)</li>
       </ul>
     </div>
 
@@ -29,21 +28,20 @@ cd min-android-app-template</pre>
       <h3>Run locally</h3>
       <ol>
         <li>Get dependencies: <code>flutter pub get</code></li>
-        <li>Run on any platform: <code>flutter run</code></li>
+        <li>Run on a connected Android device or emulator: <code>flutter run</code></li>
         <li>Or specify a device:</li>
       </ol>
-      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">flutter run -d chrome    # Web
-flutter run -d macos     # macOS
-flutter run -d android   # Android
-flutter run -d ios       # iOS</pre>
+      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">flutter devices         # Find your Android device ID
+flutter run -d DEVICE_ID # Replace with the Android device ID</pre>
     </div>
 
     <div class="card">
-      <h3>Build release artifacts</h3>
-      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">flutter build apk         # Android APK
-flutter build appbundle   # Play Store
-flutter build ios         # iOS
-flutter build web         # Web</pre>
+      <h3>Build Android artifacts</h3>
+      <p>Debug builds need no private release credentials. Before building release artifacts, configure your private keystore using <code>SIGNING.md</code> in the repository. Release builds fail if signing configuration is missing or incomplete.</p>
+      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">flutter build apk --debug    # Developer APK
+# After configuring private release signing:
+flutter build apk --release  # Signed Android APK
+flutter build appbundle      # Signed Play Store bundle</pre>
     </div>
 
     <div class="card">
@@ -56,7 +54,7 @@ flutter test --coverage   # With coverage</pre>
       <h3>Website (optional)</h3>
       <p>If you need to work on the repository website, switch to the <code>astro/</code> directory and run:</p>
       <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">cd astro
-npm install
+npm ci
 npm run dev</pre>
     </div>
 

@@ -24,9 +24,8 @@ This project has several workflows:
 
 ### 1. build.yml (Main CI)
 - Runs on push to main/develop and PRs
-- Auto-formats code with `dart format`
-- Applies fixes with `dart fix --apply`
-- Builds APK and App Bundle
+- Verifies formatting with `dart format --output=none --set-exit-if-changed .`
+- Builds a debug APK
 - Runs tests with coverage
 - Uses CI-optimized Gradle properties
 
@@ -73,7 +72,7 @@ gh run download <run-id>
 - name: Setup Flutter
   uses: subosito/flutter-action@v2
   with:
-    flutter-version: '3.38.3'  # Verify this matches requirements
+    flutter-version: '3.38.7'  # Verify this matches requirements
     channel: 'stable'
     cache: true
 ```
@@ -181,29 +180,9 @@ gh run download <run-id>
 
 ### 3. Debugging Specific Workflow Steps
 
-#### Auto-format and Commit Step
+#### Formatting verification
 
-**Error**: Permission denied or merge conflicts
-```yaml
-- name: Commit formatting changes
-  if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-  run: |
-    git config user.name "github-actions[bot]"
-    git config user.email "github-actions[bot]@users.noreply.github.com"
-    git add .
-    if git diff --staged --quiet; then
-      echo "No formatting changes to commit"
-    else
-      git commit -m "style: auto-format code [skip ci]"
-      git push
-    fi
-```
-
-**Solution**:
-- Check `GITHUB_TOKEN` has write permissions
-- Verify checkout uses correct ref
-- Ensure condition matches PR from same repo
-- Review branch protection rules
+If formatting verification fails, run `dart format .` locally, review the source diff, and include it in your change. CI checks formatting without editing files or committing changes. Keep workflow permissions read-only unless a specific publishing job requires more access.
 
 #### Coverage Upload
 
@@ -239,7 +218,7 @@ gh run download <run-id>
 
 **Solution**:
 1. Generate keystore (see `SIGNING.md`)
-2. Base64 encode: `base64 -i keystore.jks -o keystore.txt`
+2. Follow the private encoding and GitHub secret instructions in `SIGNING.md`; never print credentials or upload them as artifacts.
 3. Add secrets in Settings → Secrets → Actions
 4. Verify secret names match workflow
 

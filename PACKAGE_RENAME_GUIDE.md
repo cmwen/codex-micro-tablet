@@ -1,10 +1,10 @@
 # Package Name Rename Guide
 
-**CRITICAL**: Before running your app, you MUST update the package name from the template default `com.cmwen.min_flutter_template` to your own package name. Failure to do so will cause app launch issues.
+Choose a unique application ID before distributing your app or installing it alongside another app based on this template. The unmodified starter runs under `com.cmwen.min_flutter_template`.
 
 ## Why This Matters
 
-The package name (also called application ID) uniquely identifies your app on Android devices and app stores. Using the template's default package name will cause conflicts and launch failures.
+The package name (also called application ID) uniquely identifies your app on Android devices and app stores. Sharing an application ID with another installed app can cause install conflicts.
 
 ## Quick Checklist
 
@@ -57,7 +57,7 @@ package com.yourcompany.yourapp  // Change this
 # From terminal in android/app/src/main/kotlin/:
 mkdir -p com/yourcompany/yourapp
 mv com/cmwen/min_flutter_template/MainActivity.kt com/yourcompany/yourapp/
-rm -rf com/cmwen  # Clean up old package directory
+rmdir com/cmwen/min_flutter_template  # Remove only the now-empty directory
 ```
 
 Or use your IDE's refactoring feature to rename the package.
@@ -107,7 +107,7 @@ flutter run
 
 ## Automated Rename (Recommended)
 
-Ask AI to rename the package for you:
+With Python 3 installed, run `./scripts/setup/quick-start.sh` for interactive setup. It updates the Kotlin activity package and directory, Android identity, and Dart package imports, then runs `flutter pub get`, `flutter analyze`, and `flutter test`. Run `python3 scripts/checks/rename-regression.py` to exercise renaming in a disposable copy, including tests, analysis, a debug APK build, and Android app identity resolution. You can also ask an agent:
 
 ```
 @flutter-developer Please rename this Flutter app from "min_flutter_template" to "my_awesome_app" 
@@ -181,7 +181,7 @@ For web, update `web/manifest.json`:
 
 ### Import Errors in Tests
 
-**Solution**: Update import in `test/widget_test.dart` to match `pubspec.yaml` name field
+**Solution**: Update every Dart `package:` import in `lib/` and `test/` to match the `pubspec.yaml` name field
 
 ## References
 

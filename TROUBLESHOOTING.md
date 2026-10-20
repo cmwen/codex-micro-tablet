@@ -263,7 +263,7 @@ flutter emulators --launch <emulator_id>
    # .github/workflows/build.yml
    - uses: subosito/flutter-action@v2
      with:
-       flutter-version: '3.38.3'  # Check this matches your local version
+       flutter-version: '3.38.7'  # Check this matches your local version
    ```
 
 3. **Permissions issue:**
@@ -275,11 +275,7 @@ flutter emulators --launch <emulator_id>
 ### ❌ Keystore issues in release workflow
 
 **Check:**
-1. Base64 encoding is correct:
-   ```bash
-   base64 -i your-keystore.jks -o keystore-base64.txt
-   # Copy entire content to ANDROID_KEYSTORE_BASE64 secret
-   ```
+1. Base64 encoding is correct: follow the private-directory and restricted-permissions instructions in [SIGNING.md](SIGNING.md). Keep encoded keys out of the repository, logs, and workflow artifacts, and remove temporary encoding files after configuring the secret.
 
 2. All four secrets are set:
    - ANDROID_KEYSTORE_BASE64
@@ -305,11 +301,10 @@ flutter emulators --launch <emulator_id>
 
 **Fix:**
 ```bash
-# Update Flutter to latest stable
-flutter upgrade
-
-# Or use specific version
-flutter downgrade 3.38.3
+# Use the tested SDK rather than a moving stable branch.
+git clone --branch 3.38.7 --depth 1 https://github.com/flutter/flutter.git /tmp/flutter-3.38.7
+export PATH="/tmp/flutter-3.38.7/bin:$PATH"
+flutter --version
 ```
 
 ### "Waiting for another flutter command to release the startup lock"

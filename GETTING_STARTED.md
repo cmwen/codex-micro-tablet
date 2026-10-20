@@ -6,8 +6,9 @@ Welcome! This guide will help you customize this Android Flutter template for yo
 
 Before starting, ensure you have:
 
-- ✅ Flutter SDK 3.10.1+ ([Install Guide](https://docs.flutter.dev/get-started/install))
-- ✅ Dart 3.10.1+
+- ✅ Flutter SDK 3.38.7 (includes Dart 3.10.7) ([Install Guide](https://docs.flutter.dev/get-started/install))
+- ✅ Dart 3.10.7 (bundled with Flutter)
+- ✅ Python 3 for the setup and rename regression scripts
 - ✅ Java 17+ (for Android builds)
 - ✅ Android Studio (for Android development)
 - ✅ Git
@@ -179,41 +180,9 @@ MaterialApp(
    git remote set-url origin https://github.com/yourusername/your-repo-name.git
    ```
 
-3. **Configure signing** (choose one option):
+3. **Configure release signing privately**:
 
-   #### Option A: Auto-Generate (Recommended for Beginners)
-   
-   Just run the release workflow! It will automatically generate a keystore.
-   After the first release:
-   1. Download the `signing-credentials` artifact from the workflow run
-   2. Run the persistence script:
-      ```bash
-      ./scripts/signing/persist-credentials.sh ./signing-credentials.json
-      ```
-   3. Delete the downloaded credentials file
-   
-   #### Option B: Generate Locally (Interactive)
-   
-   Use the provided script for a guided setup:
-   ```bash
-   ./scripts/signing/generate-keystore.sh
-   ```
-   This will create a keystore and optionally upload it to GitHub Secrets.
-   
-   #### Option C: Manual Setup (Advanced)
-   
-   Generate keystore manually:
-   ```bash
-   keytool -genkey -v -keystore release-keystore.jks \
-     -keyalg RSA -keysize 2048 -validity 10000 \
-     -alias release
-   ```
-   
-   Add GitHub Secrets:
-   - `ANDROID_KEYSTORE_BASE64`: `base64 -w 0 release-keystore.jks`
-   - `ANDROID_KEYSTORE_PASSWORD`: Your keystore password
-   - `ANDROID_KEY_ALIAS`: `release`
-   - `ANDROID_KEY_PASSWORD`: Your key password
+   Debug builds work with the Android debug key. Real releases require your own private keystore and all four GitHub signing secrets. Use `./scripts/signing/generate-keystore.sh` to create a key outside the repository, then follow [SIGNING.md](SIGNING.md) to configure private local signing and GitHub secrets. Release workflows fail clearly if credentials are missing. They never generate keys or publish signing credentials.
 
 4. **Push to GitHub**:
    ```bash

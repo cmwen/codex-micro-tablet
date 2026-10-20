@@ -43,7 +43,7 @@ This document provides a comprehensive review of the **min-android-app-template*
 - Pre-release workflow for beta/alpha testing
 
 #### 3. **Modern Stack**
-- Flutter 3.10.1+ with Dart 3.10.1+
+- Flutter 3.38.7 with Dart 3.10.7
 - Material Design 3 ready
 - Null safety throughout
 - flutter_lints 6.0.0 for code quality
@@ -99,7 +99,7 @@ This document provides a comprehensive review of the **min-android-app-template*
 ### 🚧 Potential Blockers
 
 #### 1. **Flutter/Dart Version Lock**
-- SDK constraint `^3.10.1` may cause issues if user has newer/older Flutter
+- SDK constraint `^3.10.7` may cause issues if user has newer/older Flutter
 - **Impact**: Medium - users may need to upgrade/downgrade Flutter
 - **Mitigation**: Document exact Flutter version requirements prominently
 

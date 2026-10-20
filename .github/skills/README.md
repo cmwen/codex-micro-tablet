@@ -85,7 +85,7 @@ Debug GitHub Actions workflow failures and CI-specific issues.
 - Workflow-specific debugging for build.yml, release.yml, pre-release.yml
 - Common CI failure patterns and solutions
 - Cache and artifact troubleshooting
-- Auto-format commit step debugging
+- Read-only formatting verification
 - Local CI simulation commands
 
 ---
@@ -109,26 +109,6 @@ Diagnose and fix Flutter build failures including dependency conflicts and Gradl
 - Project-specific configuration guidance
 - Performance optimization tips
 - Troubleshooting checklist and quick reference
-
----
-
-### 🤖 ollama-integration
-**Path**: `.github/skills/ollama-integration/`
-
-Integrate Ollama LLM capabilities into your Flutter app using the built-in toolkit.
-
-**Use when**:
-- Adding AI chat functionality
-- Implementing tool-calling agents
-- Creating conversational interfaces with LLMs
-- Building agentic workflows with custom tools
-
-**Key capabilities**:
-- Full Ollama API client usage patterns
-- Agent framework with tool support
-- Configuration and model selection
-- Memory management patterns
-- Supported model capabilities matrix
 
 ---
 

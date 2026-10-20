@@ -103,7 +103,7 @@ Before submitting a PR:
 - [ ] Documentation is updated
 - [ ] Changes are backward compatible
 
-> **Note**: Code formatting is automatically applied by CI. You don't need to run `dart format` manually, but you can run it locally if preferred.
+> **Note**: Run `dart format .` locally. CI verifies formatting without changing or committing files.
 
 ### Commit Message Format
 

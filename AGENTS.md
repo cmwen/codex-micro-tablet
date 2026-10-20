@@ -17,6 +17,7 @@ This document provides guidance for AI agents and automated tools working with t
 - `lib/main.dart` (imports, title)
 - `test/widget_test.dart` (imports)
 - `android/app/build.gradle.kts` (namespace, applicationId)
+- `android/app/src/main/kotlin/.../MainActivity.kt` (package declaration and directory)
 - `android/app/src/main/AndroidManifest.xml` (label)
 
 ## Repository Overview
@@ -53,7 +54,6 @@ This project includes **Agent Skills** — specialized, reusable workflows for s
 | **android-debug** | Debug Android app issues | App crashes, device issues, performance problems |
 | **ci-debug** | Fix GitHub Actions failures | Workflow failures, CI-specific build errors |
 | **build-fix** | Diagnose build failures | Gradle errors, dependency conflicts, compilation issues |
-| **ollama-integration** | Integrate Ollama LLM toolkit | Adding AI chat, tool-calling agents, LLM features |
 
 ### Skill Locations
 
@@ -65,12 +65,12 @@ Skills are stored in `.github/skills/` and symlinked to `.opencode/skills/` for 
 
 ## Key Technologies
 
-- **Framework**: Flutter 3.10.1+
-- **Language**: Dart 3.10.1+
+- **Framework**: Flutter 3.38.7
+- **Language**: Dart 3.10.7
 - **Build System**: Java 17, Gradle 8.0+ with parallel builds and caching
 - **Platform**: Android
 - **Package Manager**: pub (pubspec.yaml)
-- **Testing**: flutter_test, Widget testing, Integration testing
+- **Testing**: flutter_test unit and widget tests; integration tests are not installed
 - **Linting**: flutter_lints 6.0.0
 - **CI/CD**: GitHub Actions with caching and concurrency control
 
@@ -127,7 +127,10 @@ flutter pub get
 # Run app
 flutter run
 
-# Build release
+# Build debug (no private signing credentials needed)
+flutter build apk --debug
+
+# Build release after configuring private signing (see SIGNING.md)
 flutter build apk           # Android APK
 flutter build appbundle     # Android App Bundle
 
@@ -142,9 +145,8 @@ flutter analyze
 
 ### build.yml
 - Runs on push to main/develop and PRs
-- **Auto-formats code and commits changes** - No need to worry about formatting
-- Applies `dart fix --apply` for automatic lint fixes
-- Builds APK and App Bundle
+- Verifies formatting with `dart format --output=none --set-exit-if-changed .`
+- Builds a debug APK
 - Runs tests with parallel execution
 - Uploads coverage to Codecov
 - Uses CI-optimized Gradle properties
@@ -173,40 +175,11 @@ flutter analyze
 - Supports alpha, beta, and pre-release types
 - Artifacts named with version and release type
 
-## Build Optimization
+## Build configuration
 
-This template includes comprehensive build optimizations:
+Local `android/gradle.properties` enables the daemon and build cache, up to four workers, and a 4 GB heap. CI uses `android/gradle-ci.properties` with two workers, a 3 GB heap, and no daemon. Both disable configuration caching for compatibility. Keep Java 17 and the checked-in Gradle/plugin versions aligned with the tested Flutter SDK.
 
-### Java 17 Baseline
-- Modern Android development standard
-- Required for optimal performance
-- Configured across all Gradle files
-
-### Gradle Configuration
-- **Local Development** (`android/gradle.properties`):
-  - Parallel builds with 4 workers
-  - Configuration caching enabled
-  - 4GB heap memory allocation
-  - Build daemon enabled
-  
-- **CI Environment** (`android/gradle-ci.properties`):
-  - Parallel builds with 2 workers
-  - Configuration caching disabled
-  - 3GB heap memory allocation
-  - Build daemon disabled
-
-### Performance Features
-- R8 code shrinking and resource shrinking
-- Disabled unused build features (buildConfig, aidl, renderScript, shaders)
-- Non-final resource IDs for faster builds
-- Non-transitive R classes
-
-### Expected Build Times
-- Local cached: 30-60s (debug), 1-2min (release)
-- CI cached: 3-5 minutes (full workflow)
-- Release APK: ~60MB (40-60% smaller than debug)
-
-For complete details, see [BUILD_OPTIMIZATION.md](BUILD_OPTIMIZATION.md)
+Release builds enable code and resource shrinking and require configured private signing credentials. Debug builds use the Android debug key. See [BUILD_OPTIMIZATION.md](BUILD_OPTIMIZATION.md) and [SIGNING.md](SIGNING.md).
 
 ## Documentation Resources
 
@@ -232,6 +205,7 @@ Update all files including:
 - lib/main.dart (imports, title)
 - test/widget_test.dart (imports)
 - android/app/build.gradle.kts (namespace, applicationId)
+- android/app/src/main/kotlin/.../MainActivity.kt (package declaration and directory)
 - android/app/src/main/AndroidManifest.xml (label)
 
 After updates, run flutter pub get and verify compilation.
@@ -460,7 +434,7 @@ What architecture patterns should I follow? Any gotchas?
 4. **Check problems before finishing** - Use #tool:problems to catch errors early
 5. **Review changes with #tool:changes** - Ensure no unintended modifications
 6. **Run tests with #tool:runTests or #tool:terminal** - Verify functionality
-7. **CI will auto-format code** - No need to run `dart format` manually; CI handles formatting and commits changes
+7. **Format locally** - Run `dart format .`; CI verifies formatting without changing or committing files
 8. **Use codebase to understand context** - Don't guess patterns, search for them
 9. **Handoff between agents** - Use handoff features for multi-stage tasks
 10. **Reference documentation files** - Link to docs/ files for context

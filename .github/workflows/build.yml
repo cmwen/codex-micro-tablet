@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -22,8 +22,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
       with:
-        ref: ${{ github.head_ref || github.ref_name }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+        persist-credentials: false
     
     - name: Setup Java
       uses: actions/setup-java@v5
@@ -39,7 +38,7 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.38.3'
+        flutter-version: '3.38.7'
         channel: 'stable'
         cache: true
     
@@ -57,51 +56,26 @@ jobs:
     - name: Get dependencies
       run: flutter pub get
     
-    # Auto-fix formatting and linting issues (AI-friendly workflow)
-    - name: Format and fix code
-      run: |
-        dart format .
-        dart fix --apply
-    
-    # Commit formatting changes if any (only on PRs from the same repo)
-    - name: Commit formatting changes
-      if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add .
-        if git diff --staged --quiet; then
-          echo "No formatting changes to commit"
-        else
-          git commit -m "style: auto-format code [skip ci]"
-          git push
-        fi
-    
-    # Report linter issues but only fail on errors (not warnings)
+    - name: Verify formatting
+      run: dart format --output=none --set-exit-if-changed .
+
     - name: Analyze code
       run: flutter analyze
     
     - name: Run tests with coverage
       run: flutter test --coverage --concurrency=$(nproc)
     
-    - name: Build APK
-      run: flutter build apk --release
-    
-    - name: Build App Bundle
-      run: flutter build appbundle --release
+    - name: Check renamed starter in a disposable copy
+      run: python3 scripts/checks/rename-regression.py
+
+    - name: Build debug APK
+      run: flutter build apk --debug
     
     - name: Upload APK
       uses: actions/upload-artifact@v7
       with:
         name: android-apk
-        path: build/app/outputs/flutter-apk/app-release.apk
-        retention-days: 7
-    
-    - name: Upload App Bundle
-      uses: actions/upload-artifact@v7
-      with:
-        name: android-bundle
-        path: build/app/outputs/bundle/release/app-release.aab
+        path: build/app/outputs/flutter-apk/app-debug.apk
         retention-days: 7
     
     - name: Upload Coverage

@@ -1,59 +1,29 @@
-name: 'Setup Android Signing'
-description: 'Sets up Android release signing - uses provided secrets or auto-generates a keystore'
+name: Setup Android Signing
+description: Configure release signing from four required private secrets
 
 inputs:
   keystore_base64:
-    description: 'Base64 encoded keystore file (optional - will auto-generate if not provided)'
-    required: false
-    default: ''
+    description: Base64 encoded private keystore
+    required: true
   keystore_password:
-    description: 'Keystore password (optional - will auto-generate if not provided)'
-    required: false
-    default: ''
+    description: Keystore password
+    required: true
   key_alias:
-    description: 'Key alias (optional - defaults to "release")'
-    required: false
-    default: 'release'
+    description: Signing key alias
+    required: true
   key_password:
-    description: 'Key password (optional - uses keystore_password if not provided)'
-    required: false
-    default: ''
-  app_name:
-    description: 'App name for keystore generation (used in certificate)'
-    required: false
-    default: 'Android App'
-  organization:
-    description: 'Organization name for keystore generation'
-    required: false
-    default: 'Development'
+    description: Signing key password
+    required: true
 
 outputs:
-  keystore_path:
-    description: 'Path to the keystore file'
-    value: ${{ steps.setup.outputs.keystore_path }}
-  key_properties_path:
-    description: 'Path to the key.properties file'
-    value: ${{ steps.setup.outputs.key_properties_path }}
-  is_auto_generated:
-    description: 'Whether the keystore was auto-generated'
-    value: ${{ steps.setup.outputs.is_auto_generated }}
-  keystore_base64:
-    description: 'Base64 encoded keystore (only set if auto-generated, for persistence)'
-    value: ${{ steps.setup.outputs.keystore_base64 }}
-  keystore_password:
-    description: 'Keystore password (only set if auto-generated, for persistence)'
-    value: ${{ steps.setup.outputs.keystore_password }}
-  key_alias:
-    description: 'Key alias used'
-    value: ${{ steps.setup.outputs.key_alias }}
-  key_password:
-    description: 'Key password (only set if auto-generated, for persistence)'
-    value: ${{ steps.setup.outputs.key_password }}
+  signing_directory:
+    description: Temporary directory to remove after the build
+    value: ${{ steps.setup.outputs.signing_directory }}
 
 runs:
-  using: 'composite'
+  using: composite
   steps:
-    - name: Setup Android Signing
+    - name: Validate and prepare private signing files
       id: setup
       shell: bash
       env:
@@ -61,68 +31,55 @@ runs:
         INPUT_KEYSTORE_PASSWORD: ${{ inputs.keystore_password }}
         INPUT_KEY_ALIAS: ${{ inputs.key_alias }}
         INPUT_KEY_PASSWORD: ${{ inputs.key_password }}
-        INPUT_APP_NAME: ${{ inputs.app_name }}
-        INPUT_ORGANIZATION: ${{ inputs.organization }}
       run: |
-        KEYSTORE_DIR="${GITHUB_WORKSPACE}/android/app"
-        KEYSTORE_FILE="${KEYSTORE_DIR}/release-keystore.jks"
-        KEY_PROPERTIES_FILE="${GITHUB_WORKSPACE}/android/key.properties"
-        
-        # Check if user provided keystore secrets
-        if [[ -n "$INPUT_KEYSTORE_BASE64" && -n "$INPUT_KEYSTORE_PASSWORD" ]]; then
-          echo "::notice::Using provided keystore secrets"
-          
-          # Decode the provided keystore
-          echo "$INPUT_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
-          
-          # Use provided or default values
-          KEYSTORE_PASSWORD="$INPUT_KEYSTORE_PASSWORD"
-          KEY_ALIAS="${INPUT_KEY_ALIAS:-release}"
-          KEY_PASSWORD="${INPUT_KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
-          
-          echo "is_auto_generated=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "::notice::No keystore secrets found - auto-generating keystore for this build"
-          echo "::warning::⚠️ Auto-generated keystore! Download the signing-credentials artifact and run the persistence script to keep using this keystore for future releases."
-          
-          # Generate a secure random password
-          KEYSTORE_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
-          KEY_ALIAS="${INPUT_KEY_ALIAS:-release}"
-          KEY_PASSWORD="$KEYSTORE_PASSWORD"
-          
-          # Generate the keystore
-          keytool -genkey -v \
-            -keystore "$KEYSTORE_FILE" \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -alias "$KEY_ALIAS" \
-            -keypass "$KEY_PASSWORD" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=${INPUT_APP_NAME}, OU=Mobile, O=${INPUT_ORGANIZATION}, L=City, ST=State, C=US" \
-            2>/dev/null
-          
-          # Export the keystore as base64 for persistence
-          # Note: Using -w 0 (Linux-specific) since this runs on GitHub Actions Ubuntu runners
-          KEYSTORE_BASE64=$(base64 -w 0 "$KEYSTORE_FILE")
-          
-          echo "is_auto_generated=true" >> "$GITHUB_OUTPUT"
-          echo "keystore_base64=$KEYSTORE_BASE64" >> "$GITHUB_OUTPUT"
-          echo "keystore_password=$KEYSTORE_PASSWORD" >> "$GITHUB_OUTPUT"
-          echo "key_password=$KEY_PASSWORD" >> "$GITHUB_OUTPUT"
-        fi
-        
-        # Create key.properties file
-        cat > "$KEY_PROPERTIES_FILE" << EOF
-        storePassword=$KEYSTORE_PASSWORD
-        keyPassword=$KEY_PASSWORD
-        keyAlias=$KEY_ALIAS
-        storeFile=release-keystore.jks
-        EOF
-        
-        # Output paths
-        echo "keystore_path=$KEYSTORE_FILE" >> "$GITHUB_OUTPUT"
-        echo "key_properties_path=$KEY_PROPERTIES_FILE" >> "$GITHUB_OUTPUT"
-        echo "key_alias=$KEY_ALIAS" >> "$GITHUB_OUTPUT"
-        
-        echo "✅ Android signing configured successfully"
+        set -euo pipefail
+        umask 077
+        python3 - <<'PY'
+        import base64
+        import os
+        from pathlib import Path
+        import shutil
+        import tempfile
+
+        required = {
+            'INPUT_KEYSTORE_BASE64': 'ANDROID_KEYSTORE_BASE64',
+            'INPUT_KEYSTORE_PASSWORD': 'ANDROID_KEYSTORE_PASSWORD',
+            'INPUT_KEY_ALIAS': 'ANDROID_KEY_ALIAS',
+            'INPUT_KEY_PASSWORD': 'ANDROID_KEY_PASSWORD',
+        }
+        missing = [secret for variable, secret in required.items() if not os.environ.get(variable, '').strip()]
+        if missing:
+            raise SystemExit('::error::Release signing requires all four repository secrets. Missing: ' + ', '.join(missing))
+        try:
+            data = base64.b64decode(''.join(os.environ['INPUT_KEYSTORE_BASE64'].split()), validate=True)
+            if not data:
+                raise ValueError()
+        except ValueError:
+            raise SystemExit('::error::ANDROID_KEYSTORE_BASE64 must contain a valid nonempty base64 keystore.')
+
+        # Escape every UTF-16 code unit for java.util.Properties, including spaces,
+        # backslashes and non-ASCII passwords. Never interpolate secrets into shell.
+        def property_value(value):
+            raw = value.encode('utf-16-be')
+            return ''.join('\\u' + raw[i:i + 2].hex() for i in range(0, len(raw), 2))
+
+        directory = Path(tempfile.mkdtemp(prefix='android-signing-', dir=os.environ['RUNNER_TEMP']))
+        properties = Path(os.environ['GITHUB_WORKSPACE']) / 'android/key.properties'
+        try:
+            keystore = directory / 'release.jks'
+            keystore.write_bytes(data)
+            values = {
+                'storeFile': str(keystore),
+                'storePassword': os.environ['INPUT_KEYSTORE_PASSWORD'],
+                'keyAlias': os.environ['INPUT_KEY_ALIAS'],
+                'keyPassword': os.environ['INPUT_KEY_PASSWORD'],
+            }
+            properties.write_text(''.join(key + '=' + property_value(value) + '\n' for key, value in values.items()), encoding='ascii')
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                output.write('signing_directory=' + str(directory) + '\n')
+        except Exception:
+            properties.unlink(missing_ok=True)
+            shutil.rmtree(directory)
+            raise SystemExit('::error::Unable to prepare private signing files.')
+        print('Release signing files prepared privately for this job.')
+        PY

@@ -25,7 +25,7 @@ const REPO_NAME = 'your-repo-name';
 
 ## Local environment & expectations
 
-- Node: use Node 18+ (see `package.json` engines field). The site uses Astro v5.15 — prefer `npm ci` to get supported versions.
+- Node: use Node 24 LTS (see `package.json` engines field). The site uses Astro v6 — prefer `npm ci` to get supported versions.
 - Commands:
   - `npm ci` — install exact dependencies for CI
   - `npm install` — install locally for development
@@ -52,7 +52,7 @@ const REPO_NAME = 'your-repo-name';
   - Add additional layouts in `astro/src/layouts/` and import them in pages.
 
 - CI & deploy changes
-  - The CI pipeline lives at `.github/workflows/deploy-website.yml` and builds `astro/dist/` to deploy to GitHub Pages — it runs when a GitHub Release is published (or via manual dispatch).
+  - The CI pipeline lives at `.github/workflows/deploy-website.yml` and builds `astro/dist/` to deploy to GitHub Pages — it runs for published releases, successful release workflows that published a matching release, or manual dispatch.
   - If a change requires a different Pages branch, the workflow must be updated and peer-reviewed.
 
 ## Authoring rules and conventions

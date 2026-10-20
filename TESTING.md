@@ -93,12 +93,15 @@ void main() {
 
 ### Integration Tests
 
-Location: `integration_test/`
+Integration tests are not installed in this template: there is no `integration_test/` directory or SDK dependency yet. The following is an example setup for your app.
 
 Setup:
 ```bash
 # Add integration_test dependency to pubspec.yaml
-flutter pub add --dev integration_test
+# Add this under dev_dependencies in pubspec.yaml:
+# integration_test:
+#   sdk: flutter
+flutter pub get
 ```
 
 Example:
@@ -300,11 +303,7 @@ Tests run automatically on:
 - Every pull request
 - Before releases
 
-The CI also:
-- **Auto-formats code** using `dart format` and commits changes
-- **Auto-fixes linter issues** using `dart fix --apply`
-
-This means you don't need to worry about formatting - CI will handle it for you.
+CI verifies formatting with `dart format --output=none --set-exit-if-changed .` and runs `flutter analyze`. Run `dart format .` locally before submitting changes. CI does not commit source changes.
 
 See `.github/workflows/build.yml` for configuration.
 
@@ -363,7 +362,7 @@ flutter test --watch                  # Watch mode
 flutter test --coverage
 genhtml coverage/lcov.info -o coverage/html
 
-# Integration tests
+# After installing and writing integration tests
 flutter test integration_test
 flutter drive --target=integration_test/app_test.dart
 ```

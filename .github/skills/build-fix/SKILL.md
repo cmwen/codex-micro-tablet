@@ -278,7 +278,7 @@ Error: Permission denied
 
 - **Java 17**: Required for optimal performance
 - **Gradle 8.0+**: Modern build system
-- **Flutter 3.10.1+**: Latest stable features
+- **Flutter 3.38.7**: Pinned and tested SDK
 - **Kotlin**: For Android native code
 - **R8**: Code shrinking enabled
 - **Parallel builds**: Optimized for performance
@@ -350,7 +350,7 @@ If builds work but are slow:
 - Enable parallel builds: `org.gradle.parallel=true`
 - Increase workers: `org.gradle.workers.max=4`
 - More memory: `org.gradle.jvmargs=-Xmx4g`
-- Enable configuration cache: `org.gradle.configuration-cache=true`
+- Keep configuration caching disabled with `org.gradle.configuration-cache=false`; enable it only after validating compatibility with the Flutter and Android plugins
 
 ### CI Environment
 - Use `android/gradle-ci.properties`
