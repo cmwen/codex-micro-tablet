@@ -70,6 +70,12 @@ adb -s HGT6JPD3 shell am start -n com.cmwen.codex_micro_tablet/.MainActivity
 
 Debug APKs use the Android debug key. Release builds require private signing configured as described in [SIGNING.md](SIGNING.md).
 
+## Verified Lenovo installation
+
+The debug APK was installed and launched on the Lenovo Tab M8 on 22 October 2026. Native HID registration and Android discoverability succeeded. Mac pairing and Desktop Micro discovery/action acceptance remain unverified.
+
+If WSL cannot see the reconnected tablet but Windows owns it, use Windows ADB on a separate server port (5038 was used for verification) rather than forcing USB/IP attachment.
+
 ## Protocol and evidence
 
 See [implementation and validation](docs/CODEX_MICRO_TABLET.md) for protocol details and the distinction between automated checks, tablet observations, and Mac acceptance.
