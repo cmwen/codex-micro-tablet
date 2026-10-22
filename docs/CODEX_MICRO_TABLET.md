@@ -68,3 +68,10 @@ Tablet logs confirmed registration of services 1812, 180a and 180f with status0,
 ### macOS report framing follow-up
 
 The Mac recognized the tablet but reported connected with limited functionality. Tablet logs confirmed MTU517, encrypted input CCCD subscription, and repeated 64-byte output writes; the original BLE length check rejected these before protocol decoding. The BLE boundary now accepts a 64-byte report only when it carries report ID6 before a 63-byte body, or a zero-padded 63-byte body. Other IDs, nonzero excess data and oversized writes remain rejected. Standard BLE bodies and Classic reports retain their existing format. Native regression checks cover these cases. Header-only diagnostics record the first three bytes without JSON payload logging. End-to-end recovery must be verified after reconnecting the Mac.
+
+
+## Prominent usage and reset schedule
+
+The existing FNK0104B GET /v1/status contract supplies five-hour and weekly used_percent/resets_at fields. Usage is now a dedicated panel above the control area, with used/remaining percentages, responsive columns, progress, relative countdowns and full local reset dates/times including timezone. The countdown refreshes every30seconds independently of the5second bridge poll. Past resets retain reported usage and show awaiting update. Failed bridge reads already clear the snapshot, preventing old percentages/reset dates from appearing live. Unknown windows are unavailable rather than0percent. A bridge setup button is accessible near the top of the screen; chat submission remains in Live workspace.
+
+Validation: analyzer clean,29Fluttertests passed, debug APK built. New tests cover both windows/exact dates,zero vsunknown,elapsed resets,no-network countdown updates,loss of snapshot and320/533/853width layouts. The existing disabled-control test now scrolls the target into view so its tap assertion remains meaningful after moving usage above controls. Lenovo Wi-Fi is connected; real bridge usage needs the user's URL and shared token.

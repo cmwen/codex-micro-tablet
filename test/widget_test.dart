@@ -109,6 +109,7 @@ void main() {
     await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
     await tester.pumpAndSettle();
     expect(find.textContaining('Waiting for Micro discovery'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('agent-0')));
     await tester.tap(find.byKey(const ValueKey('agent-0')));
     expect(hid.keys, isEmpty);
     await tester.pumpWidget(const SizedBox());

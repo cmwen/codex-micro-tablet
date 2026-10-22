@@ -50,6 +50,10 @@ Use the Mac's actual LAN IP. Allow access on that private network. The tablet an
 
 In the tablet's bridge settings, enter the origin `http://192.168.1.20:8765` and the same token. Only local IPs, localhost, and `.local` names allow HTTP; remote addresses require HTTPS. Local HTTP is unencrypted on the network, matching the existing bridge. Use a trusted LAN. Tokens are stored encrypted on the tablet and never followed through HTTP redirects.
 
+The **Codex usage** panel sits above the controls in portrait and landscape. It shows five-hour and weekly percentages used and remaining, with progress bars. Each window shows a reset countdown and the exact reset date/time in the tablet's local timezone. Countdown labels update every 30 seconds. Reset values come from the existing bridge's `codex.usage.five_hour/weekly.resets_at` Unix-second timestamps; no bridge change is required. Unknown values remain unavailable, and an elapsed timestamp says “Awaiting bridge reset update” until the bridge supplies a fresh allowance. The app never assumes that a reset restores a particular percentage.
+
+Use the tune button beside **Codex usage** to enter the same bridge origin and Monitor key as the ESP32. The tablet needs Wi-Fi access to the host; the Mac's loopback address `127.0.0.1` is not reachable from the tablet. Saved keys remain in Android Keystore-backed encrypted storage.
+
 The app reads authenticated `GET /v1/status` every five seconds. Snapshot failures clear the displayed live snapshot; an integration state of degraded/unavailable is not shown as fully connected. It submits explicit `POST /v1/commands/text` with `text`, optional `agent_id`, and a fresh `request_id`, with `X-Monitor-Key` authentication. A queued response confirms acceptance, not task completion. Submissions are never automatically retried; after a timeout check Codex before resending. Named bridge threads are separate from host-owned AG00–AG05 slot assignments.
 
 ## Build and validate

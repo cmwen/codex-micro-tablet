@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'bridge_client.dart';
 import 'hid_service.dart';
+import 'usage_panel.dart';
 
 const ink = Color(0xff101b20);
 const panel = Color(0xff1b2a30);
@@ -219,6 +220,17 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
                 _header(),
                 const SizedBox(height: 20),
                 _linkBanner(),
+                const SizedBox(height: 18),
+                UsagePanel(
+                  usage: (bridge.snapshot?['codex'] as Map?)?['usage'] as Map?,
+                  status: bridge.baseUrl.isEmpty
+                      ? 'Set up your monitor bridge'
+                      : bridge.status,
+                  error: bridge.error,
+                  lastUpdated: bridge.lastUpdated,
+                  onSettings: _bridgeSettings,
+                  onRefresh: bridge.refresh,
+                ),
                 const SizedBox(height: 22),
                 if (wide)
                   Row(
@@ -501,8 +513,6 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
 
   Widget _bridgePanel() {
     final snapshot = bridge.snapshot;
-    final codex = snapshot?['codex'] as Map?;
-    final usage = codex?['usage'] as Map?;
     final agents = (snapshot?['agents'] as List? ?? [])
         .whereType<Map>()
         .toList();
@@ -555,18 +565,6 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
                 ),
               ),
             ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _quota('5-hour allowance', usage?['five_hour'] as Map?),
-              ),
-              const SizedBox(width: 18),
-              Expanded(
-                child: _quota('Weekly allowance', usage?['weekly'] as Map?),
-              ),
-            ],
-          ),
           const SizedBox(height: 24),
           _section('BRIDGE CHATS', '${agents.length} visible'),
           const SizedBox(height: 12),
@@ -731,49 +729,6 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
     'error' => Colors.redAccent,
     _ => muted,
   };
-
-  Widget _quota(String label, Map? values) {
-    final used = values?['used_percent'];
-    final remaining = used is num
-        ? (100 - used.toDouble()).clamp(0, 100).toDouble()
-        : null;
-    final reset = values?['resets_at'];
-    String resetLabel = 'Reset unknown';
-    if (reset is num) {
-      final duration = DateTime.fromMillisecondsSinceEpoch(
-        reset.toInt() * 1000,
-      ).difference(DateTime.now());
-      resetLabel = duration.isNegative
-          ? 'Awaiting reset update'
-          : duration.inHours >= 24
-          ? 'Resets in ${duration.inDays}d ${duration.inHours % 24}h'
-          : 'Resets in ${duration.inHours}h ${duration.inMinutes % 60}m';
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: muted, fontSize: 12)),
-        const SizedBox(height: 6),
-        Text(
-          remaining == null ? '—' : '${remaining.round()}%',
-          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
-        ),
-        Text(
-          remaining == null ? 'Not available' : 'remaining',
-          style: const TextStyle(color: muted, fontSize: 11),
-        ),
-        const SizedBox(height: 8),
-        LinearProgressIndicator(
-          value: remaining == null ? 0 : remaining / 100,
-          color: mint,
-          backgroundColor: Colors.white10,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        const SizedBox(height: 8),
-        Text(resetLabel, style: const TextStyle(color: muted, fontSize: 10)),
-      ],
-    );
-  }
 }
 
 /// A tap recognizer arbitrates against scrolling and owns its primary pointer.
