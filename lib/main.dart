@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 import 'bridge_client.dart';
@@ -492,6 +493,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
     accent: accent,
     subtitle: subtitle,
     compact: true,
+    immediateHold: id == 10,
   );
 
   Widget _section(String title, String trailing) => Row(
@@ -744,6 +746,7 @@ class HoldControl extends StatefulWidget {
     this.accent = cream,
     this.subtitle,
     this.compact = false,
+    this.immediateHold = false,
   });
   final bool enabled;
   final ValueChanged<bool> onChanged;
@@ -753,6 +756,8 @@ class HoldControl extends StatefulWidget {
   final Color accent;
   final String? subtitle;
   final bool compact;
+  // Push-to-talk owns its touch immediately; dragging here must not scroll.
+  final bool immediateHold;
   @override
   State<HoldControl> createState() => _HoldControlState();
 }
@@ -760,11 +765,13 @@ class HoldControl extends StatefulWidget {
 class _HoldControlState extends State<HoldControl> {
   bool pointerHeld = false;
   LogicalKeyboardKey? keyboardKey;
+  int? primaryPointer;
   bool get keyboardHeld => keyboardKey != null;
 
   void release() {
     if (!pointerHeld && !keyboardHeld) return;
     pointerHeld = false;
+    primaryPointer = null;
     keyboardKey = null;
     widget.onChanged(false);
   }
@@ -783,6 +790,53 @@ class _HoldControlState extends State<HoldControl> {
   void dispose() {
     release();
     super.dispose();
+  }
+
+  Widget _pointerControl({required Widget child}) {
+    if (widget.immediateHold) {
+      return RawGestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        gestures: widget.enabled
+            ? {
+                EagerGestureRecognizer:
+                    GestureRecognizerFactoryWithHandlers<
+                      EagerGestureRecognizer
+                    >(EagerGestureRecognizer.new, (_) {}),
+              }
+            : const {},
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (event) {
+            if (!widget.enabled || pointerHeld || keyboardHeld) return;
+            primaryPointer = event.pointer;
+            setState(() => pointerHeld = true);
+            widget.onChanged(true);
+          },
+          onPointerUp: (event) {
+            if (event.pointer == primaryPointer) releasePointer();
+          },
+          onPointerCancel: (event) {
+            if (event.pointer == primaryPointer) releasePointer();
+          },
+          child: child,
+        ),
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
+      onTapDown: widget.enabled
+          ? (_) {
+              if (pointerHeld || keyboardHeld) return;
+              setState(() => pointerHeld = true);
+              widget.onChanged(true);
+            }
+          : null,
+      onTapUp: widget.enabled ? (_) => releasePointer() : null,
+      onTapCancel: widget.enabled ? releasePointer : null,
+      child: child,
+    );
   }
 
   @override
@@ -810,18 +864,7 @@ class _HoldControlState extends State<HoldControl> {
         }
         return KeyEventResult.handled;
       },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        excludeFromSemantics: true,
-        onTapDown: widget.enabled
-            ? (_) {
-                if (pointerHeld || keyboardHeld) return;
-                setState(() => pointerHeld = true);
-                widget.onChanged(true);
-              }
-            : null,
-        onTapUp: widget.enabled ? (_) => releasePointer() : null,
-        onTapCancel: widget.enabled ? releasePointer : null,
+      child: _pointerControl(
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 90),
           padding: EdgeInsets.all(widget.compact ? 10 : 12),
@@ -851,7 +894,9 @@ class _HoldControlState extends State<HoldControl> {
                 ),
                 SizedBox(height: widget.compact ? 4 : 8),
                 Text(
-                  widget.label,
+                  widget.immediateHold && (pointerHeld || keyboardHeld)
+                      ? 'Hold active'
+                      : widget.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -861,7 +906,9 @@ class _HoldControlState extends State<HoldControl> {
                 ),
                 if (widget.subtitle != null)
                   Text(
-                    widget.subtitle!,
+                    widget.immediateHold && (pointerHeld || keyboardHeld)
+                        ? 'Release to finish'
+                        : widget.subtitle!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: muted, fontSize: 10),

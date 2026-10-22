@@ -21,7 +21,7 @@ This is an unofficial compatibility experiment. It is not an official Codex Micr
 
 The app distinguishes **HID connected** from **Micro handshake received**. Controls remain disabled until a recognized host discovery/status request arrives. Pairing alone does not prove Desktop accepted this device. BLE also needs encrypted report access, input notification subscription, and an ATT MTU of at least 66 for the 63-byte reports. The Mac must negotiate the MTU; the tablet cannot force it as a peripheral. Native Micro discovery, slot status, mapped actions and voice still require verification on the target Mac.
 
-Hold to talk and Voice send HID gestures to the Mac. They use the **Mac's selected microphone**; this app does not stream the tablet microphone or impersonate a Bluetooth headset. Desktop owns mappings and approvals. Review the target app before using Approve or Send.
+Hold to talk starts on touch-down and stays active until that finger lifts or the touch is canceled. Finger movement on this button does not scroll the dashboard; swipe elsewhere to scroll. It shows **Hold active** while pressed. Hold to talk and Voice send HID gestures to the Mac. They use the **Mac's selected microphone**; this app does not stream the tablet microphone or impersonate a Bluetooth headset. Desktop owns mappings and approvals. Review the target app before using Approve or Send.
 
 ## Pair with the Mac
 

@@ -168,11 +168,21 @@ class MainActivity : FlutterActivity() {
                         val id = call.argument<Int>("id") ?: error("Missing control")
                         val down = call.argument<Boolean>("pressed") ?: false
                         check(id in 0..16) { "Unknown control" }
-                        check(host != null && registered && discovered && linkReady()) { "Waiting for Desktop Micro discovery" }
-                        if ((down && pressed.add(id)) || (!down && pressed.remove(id))) enqueue(MicroWire.key(id, down))
+                        if (down) {
+                            check(host != null && registered && discovered && linkReady()) { "Waiting for Desktop Micro discovery" }
+                            if (pressed.add(id)) {
+                                if (id == 10) Log.i("CodexMicroHid", "Push-to-talk down")
+                                enqueue(MicroWire.key(id, true))
+                            }
+                        } else if (pressed.remove(id)) {
+                            // Releases remain valid if discovery/suspend state changed
+                            // after keydown. A failed neutral report times out/disconnects.
+                            if (id == 10) Log.i("CodexMicroHid", "Push-to-talk up")
+                            if (host != null && registered) enqueue(MicroWire.key(id, false))
+                        }
                         result.success(true)
                     }
-                    "releaseAll" -> { releaseAll(); result.success(true) }
+                    "releaseAll" -> { releaseAll("dashboard lifecycle"); result.success(true) }
                     "settings" -> { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)); result.success(true) }
                     "loadBridgeSettings" -> result.success(loadBridgeSettings())
                     "saveBridgeSettings" -> {
@@ -386,7 +396,8 @@ class MainActivity : FlutterActivity() {
     }
 
     /** Complete pending messages, then synchronously release held controls before pause. */
-    private fun releaseAll() {
+    private fun releaseAll(reason: String = "connection change") {
+        if (pressed.contains(10)) Log.i("CodexMicroHid", "Push-to-talk released: $reason")
         if (transportMode == "ble") {
             // Notifications are asynchronous. Preserve any fragmented message, enqueue
             // neutral reports, and disconnect if completion cannot be confirmed.
@@ -458,7 +469,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onPause() {
-        releaseAll()
+        releaseAll("activity paused")
         // Android pairing/permission dialogs pause this activity. A surviving BLE
         // link remains discovered; held controls are still released above.
         if (transportMode == "classic") {
@@ -472,7 +483,7 @@ class MainActivity : FlutterActivity() {
     override fun onResume() { super.onResume(); if (requested) startHid(false); emit() }
     override fun onDestroy() {
         requested = false
-        releaseAll()
+        releaseAll("activity destroyed")
         if (permitted()) { ble.stop(); hid?.unregisterApp(); hid?.let { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) } }
         if (listening) unregisterReceiver(receiver)
         handler.removeCallbacksAndMessages(null)
