@@ -221,6 +221,16 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
                 _header(),
                 const SizedBox(height: 20),
                 _linkBanner(),
+                if (hid.microphoneActive) ...[
+                  const SizedBox(height: 10),
+                  const Row(
+                    children: [
+                      Icon(Icons.mic, color: mint, size: 18),
+                      SizedBox(width: 8),
+                      Text('USB microphone on', style: TextStyle(color: mint)),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 18),
                 UsagePanel(
                   usage: (bridge.snapshot?['codex'] as Map?)?['usage'] as Map?,
@@ -287,8 +297,13 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
           ],
         ),
       ),
+      IconButton(
+        tooltip: 'Release controls / restore USB',
+        onPressed: hid.restoreUsb,
+        icon: const Icon(Icons.restart_alt),
+      ),
       IconButton.filledTonal(
-        tooltip: 'Bluetooth connection',
+        tooltip: 'Connection settings',
         onPressed: _connections,
         icon: const Icon(Icons.bluetooth),
       ),
@@ -299,7 +314,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
     final title = hid.ready
         ? 'Micro linked · ${hid.hostName}'
         : hid.connected
-        ? 'Bluetooth connected · Waiting for Micro discovery'
+        ? '${hid.isUsb ? "USB" : "Bluetooth"} connected · Waiting for Micro discovery'
         : hid.registered
         ? 'Ready to pair with your Mac'
         : 'Connect your Mac to get started';
@@ -423,7 +438,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
                 10,
                 'Hold to talk',
                 Icons.mic_none,
-                subtitle: 'Mac microphone',
+                subtitle: hid.isUsb ? 'Tablet microphone' : 'Mac microphone',
               ),
             ),
           ),
@@ -449,8 +464,10 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
         ],
       ),
       const SizedBox(height: 10),
-      const Text(
-        'Voice controls use your Mac’s microphone. Tablet audio is not transmitted over HID.',
+      Text(
+        hid.isUsb
+            ? 'Select Codex Micro Tablet as your Mac’s microphone. USB audio is sent only while the microphone is on.'
+            : 'Voice controls use your Mac’s microphone. Tablet audio is not transmitted over HID.',
         style: TextStyle(color: muted, fontSize: 12),
       ),
       const SizedBox(height: 20),
@@ -973,20 +990,23 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-              SegmentedButton<bool>(
+              SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: true, label: Text('BLE HID')),
-                  ButtonSegment(value: false, label: Text('Classic HID')),
+                  ButtonSegment(value: 'ble', label: Text('BLE')),
+                  ButtonSegment(value: 'classic', label: Text('Classic')),
+                  ButtonSegment(value: 'usb', label: Text('USB + mic')),
                 ],
-                selected: {hid.isBle},
-                onSelectionChanged: (value) => hid.setTransport(value.first),
+                selected: {hid.transportMode},
+                onSelectionChanged: (value) => hid.chooseTransport(value.first),
               ),
               const SizedBox(height: 12),
               Text(
-                hid.isBle
-                    ? '1. Start BLE HID.\n2. On your Mac, open Bluetooth settings and pair with Codex Micro Tablet. Forget an old tablet pairing first if needed.\n3. Open Codex’s Micro settings. Your Mac initiates the BLE connection.'
-                    : '1. Start HID and make the tablet discoverable.\n2. On your Mac, open Bluetooth settings and pair with this tablet.\n3. Select the paired Mac below, then open Codex’s Micro settings.',
-                style: TextStyle(color: muted, height: 1.6),
+                hid.isUsb
+                    ? 'Connect a data USB cable to your Mac. Allow root access if asked, then start USB HID + microphone. Select Codex Micro Tablet as the Mac’s input device. USB briefly reconnects when modes change; charging continues and ADB is included.'
+                    : hid.isBle
+                    ? '1. Start BLE HID.\n2. On your Mac, pair with Codex Micro Tablet.\n3. Open Codex’s Micro settings.'
+                    : '1. Start HID and make the tablet discoverable.\n2. Pair with the tablet from your Mac.\n3. Select the paired Mac below and open Codex’s Micro settings.',
+                style: const TextStyle(color: muted, height: 1.6),
               ),
               const SizedBox(height: 18),
               Wrap(
@@ -996,22 +1016,29 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                   FilledButton.icon(
                     onPressed: hid.start,
                     icon: const Icon(Icons.power_settings_new),
-                    label: Text(hid.isBle ? 'Start BLE HID' : 'Start HID'),
+                    label: Text(
+                      hid.isUsb
+                          ? 'Start USB HID + microphone'
+                          : hid.isBle
+                          ? 'Start BLE HID'
+                          : 'Start HID',
+                    ),
                   ),
-                  if (!hid.isBle)
+                  if (hid.transportMode == 'classic')
                     OutlinedButton(
                       onPressed: hid.registered ? hid.discoverable : null,
                       child: const Text('Make discoverable'),
                     ),
-                  TextButton(
-                    onPressed: hid.settings,
-                    child: const Text('Bluetooth settings'),
-                  ),
+                  if (!hid.isUsb)
+                    TextButton(
+                      onPressed: hid.settings,
+                      child: const Text('Bluetooth settings'),
+                    ),
                 ],
               ),
               const SizedBox(height: 16),
               Text(
-                'HID profile: ${hid.registered ? "registered" : "not registered"}  ·  Bluetooth: ${hid.connected ? "connected" : "not connected"}',
+                'HID profile: ${hid.registered ? "registered" : "not registered"}  ·  ${hid.isUsb ? "USB" : "Bluetooth"}: ${hid.connected ? "connected" : "not connected"}',
                 style: const TextStyle(color: muted, fontSize: 12),
               ),
               Text(
@@ -1023,6 +1050,36 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                   'BLE advertising: ${hid.advertising ? "active" : "off"}  ·  MTU ${hid.state['mtu'] ?? 23}',
                   style: const TextStyle(color: muted, fontSize: 12),
                 ),
+              if (hid.isUsb) ...[
+                Text(
+                  hid.state['usbStatus']?.toString() ?? 'USB mode inactive',
+                  style: const TextStyle(color: muted, fontSize: 12),
+                ),
+                Text(
+                  hid.state['microphoneStatus']?.toString() ?? 'Microphone off',
+                  style: TextStyle(color: hid.microphoneActive ? mint : muted),
+                ),
+                if (hid.state['usbActive'] == true)
+                  TextButton.icon(
+                    onPressed: hid.microphoneActive
+                        ? hid.stopMicrophone
+                        : hid.startMicrophone,
+                    icon: Icon(
+                      hid.microphoneActive ? Icons.mic_off : Icons.mic,
+                    ),
+                    label: Text(
+                      hid.microphoneActive
+                          ? 'Mute USB microphone'
+                          : 'Enable USB microphone',
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: hid.restoreUsb,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Release controls / restore USB'),
+              ),
               if (hid.error.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
@@ -1032,42 +1089,45 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                   ),
                 ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      hid.isBle
-                          ? 'Paired computers · connect from Mac'
-                          : 'Paired computers',
+              if (!hid.isUsb) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        hid.isBle
+                            ? 'Paired computers · connect from Mac'
+                            : 'Paired computers',
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.refresh),
-                    tooltip: 'Refresh paired devices',
-                  ),
-                ],
-              ),
-              if (devices.isEmpty)
-                const Text(
-                  'No paired devices yet. Pair from macOS, then refresh.',
-                  style: TextStyle(color: muted),
+                    IconButton(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh),
+                      tooltip: 'Refresh paired devices',
+                    ),
+                  ],
                 ),
-              for (final device in devices)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.computer),
-                  title: Text((device['name'] ?? 'Paired device').toString()),
-                  subtitle: Text((device['address'] ?? '').toString()),
-                  trailing: hid.isBle
-                      ? null
-                      : TextButton(
-                          onPressed: hid.registered
-                              ? () => hid.connect(device['address'].toString())
-                              : null,
-                          child: const Text('Connect'),
-                        ),
-                ),
+                if (devices.isEmpty)
+                  const Text(
+                    'No paired devices yet. Pair from macOS, then refresh.',
+                    style: TextStyle(color: muted),
+                  ),
+                for (final device in devices)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.computer),
+                    title: Text((device['name'] ?? 'Paired device').toString()),
+                    subtitle: Text((device['address'] ?? '').toString()),
+                    trailing: hid.isBle
+                        ? null
+                        : TextButton(
+                            onPressed: hid.registered
+                                ? () =>
+                                      hid.connect(device['address'].toString())
+                                : null,
+                            child: const Text('Connect'),
+                          ),
+                  ),
+              ],
               if (hid.connected)
                 TextButton(
                   onPressed: hid.disconnect,
@@ -1075,7 +1135,9 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                 ),
               const SizedBox(height: 16),
               Text(
-                hid.isBle
+                hid.isUsb
+                    ? 'Leaving the dashboard restores USB mode. After a hard crash, reopen the app or use Release controls / restore USB. No watchdog or kernel flashing is used.'
+                    : hid.isBle
                     ? 'BLE advertises the Micro vendor and product identity. Pairing and a successful Micro discovery exchange are both needed before controls become available.'
                     : 'Classic HID uses Android’s device identity. A Bluetooth connection alone does not confirm Micro compatibility.',
                 style: TextStyle(color: muted, fontSize: 12, height: 1.5),

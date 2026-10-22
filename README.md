@@ -1,6 +1,6 @@
 # Codex Micro Tablet
 
-A native Bluetooth HID control surface and Flutter dashboard for an Android tablet beside a Mac. Built from `cmwen/min-android-app-template` and the owner's FNK0104B monitor protocol. Android 9 / API 28 or later is required; the Lenovo Tab M8 TB-8505F runs Android 10 / API 29 and exposes `HidDeviceService`.
+A native Bluetooth and rooted USB HID control surface and Flutter dashboard for an Android tablet beside a Mac. Built from `cmwen/min-android-app-template` and the owner's FNK0104B monitor protocol. Android 9 / API 28 or later is required; the Lenovo Tab M8 TB-8505F runs Android 10 / API 29 and exposes `HidDeviceService`.
 
 This is an unofficial compatibility experiment. It is not an official Codex Micro device or app.
 
@@ -15,13 +15,13 @@ This is an unofficial compatibility experiment. It is not an official Codex Micr
 
 ## Bluetooth transports
 
-**BLE HID is the default.** The app publishes a HID-over-GATT service (`1812`), Device Information service with USB-source PnP identity `303a:8360` (version `00b0`), and vendor report 6. This matches the owner's ESP32 BLE diagnostic. Android's GATT server supplies these values; no system Bluetooth files are changed and the app does not execute root commands.
+**BLE HID is the default.** The app publishes a HID-over-GATT service (`1812`), Device Information service with USB-source PnP identity `303a:8360` (version `00b0`), and vendor report 6. This matches the owner's ESP32 BLE diagnostic. Android's GATT server supplies these values; no system Bluetooth files are changed and BLE mode does not require root.
 
 **Classic HID remains selectable.** Android's `BluetoothHidDevice` API supplies its own PnP identity, so the earlier Classic connection did not establish Desktop Micro discovery. Switching transport disconnects the current host and clears discovery.
 
 The app distinguishes **HID connected** from **Micro handshake received**. Controls remain disabled until a recognized host discovery/status request arrives. Pairing alone does not prove Desktop accepted this device. BLE also needs encrypted report access, input notification subscription, and an ATT MTU of at least 66 for the 63-byte reports. The Mac must negotiate the MTU; the tablet cannot force it as a peripheral. Native Micro discovery, slot status, mapped actions and voice still require verification on the target Mac.
 
-Hold to talk starts on touch-down and stays active until that finger lifts or the touch is canceled. Finger movement on this button does not scroll the dashboard; swipe elsewhere to scroll. It shows **Hold active** while pressed. Hold to talk and Voice send HID gestures to the Mac. They use the **Mac's selected microphone**; this app does not stream the tablet microphone or impersonate a Bluetooth headset. Desktop owns mappings and approvals. Review the target app before using Approve or Send.
+Hold to talk starts on touch-down and stays active until that finger lifts or the touch is canceled. Finger movement on this button does not scroll the dashboard; swipe elsewhere to scroll. It shows **Hold active** while pressed. Hold to talk and Voice send HID gestures to the Mac. They use the **Mac's selected microphone**. BLE mode supplies no audio; USB mode can expose the tablet microphone as described below. Desktop owns mappings and approvals. Review the target app before using Approve or Send.
 
 ## Pair with the Mac
 
@@ -36,6 +36,16 @@ For Classic comparison, choose **Classic HID**, Start HID, Make discoverable, th
 Keep the tablet app visible. Leaving the app releases held controls and invalidates Micro state. The screen stays awake while the dashboard is visible. This foreground experiment does not promise background or unattended reconnection.
 
 Official retail setup and mappings: [Codex Micro guide](https://learn.chatgpt.com/docs/features/codex-micro). The guide documents the retail hardware, not this tablet.
+
+## Rooted USB HID and microphone (experimental)
+
+On the rooted stock Lenovo TB-8505F, select **USB + mic** in Connection settings and tap **Start USB HID + microphone**. Allow this app in Magisk and grant Android microphone permission. Connect a data cable to the Mac, open Codex Micro settings, and select **Codex Micro Tablet** in macOS Sound → Input if it appears. No Bluetooth pairing is needed for USB. If microphone startup failed before selecting the Mac input, tap **Enable USB microphone** to retry.
+
+This mode temporarily combines vendor HID report 6, the stock kernel's USB audio-source function, and ADB. USB re-enumerates briefly when starting/restoring; charging continues and USB ADB was verified alongside HID. It requires the existing `hid.gs0`, `audio_source.gs3` and `ffs.adb` functions, not a flashed kernel. USB identity is `303a:8360`, valid BCD version `0100`. Other tablets/firmwares are not supported by this device-specific implementation.
+
+Microphone capture uses the built-in mic at 44.1 kHz, duplicates mono to stereo S16_LE, and sends PCM through a private root process pipe to the USB audio ALSA device. Audio is never saved. Its status and frame counter describe tablet-side capture/writes, not proof that the Mac received sound. **Windows enumerated HID and ADB successfully but rejected the audio interface; Mac microphone and USB Micro acceptance remain pending.** BLE operation was previously confirmed by the owner.
+
+**Release controls / restore USB** is available even while disconnected, both in the header and Connection settings. It releases held controls, stops microphone capture and restores the saved gadget configuration. Leaving the dashboard normally also restores USB. Closing a helper's pipe triggers best-effort cleanup; a hard crash can leave USB changed until the app is reopened and recovers, or manual restore is used. Root-only recovery metadata lives in `/data/local/tmp/codex-micro-usb`; do not remove it while a session or recovery is pending. There is no watchdog, boot service, persistent USB property change, SELinux policy change, or partition flashing. Reopening does not automatically resume microphone capture.
 
 ## Use the existing Wi-Fi bridge
 

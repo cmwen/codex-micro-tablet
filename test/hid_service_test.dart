@@ -80,4 +80,36 @@ void main() {
       expect(hid.ready, isFalse);
     },
   );
+
+  test('USB transport selection is reflected from native state', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return {
+            'supported': true,
+            'transportMode': call.arguments['transport'],
+            'usbActive': false,
+            'connected': false,
+            'discovered': false,
+          };
+        });
+
+    await hid.chooseTransport('usb');
+
+    expect(calls.single.method, 'setTransport');
+    expect(calls.single.arguments, {'transport': 'usb'});
+    expect(hid.isUsb, isTrue);
+    expect(hid.ready, isFalse);
+  });
+
+  test(
+    'manual USB restore remains callable while HID is disconnected',
+    () async {
+      hid.applyState({'transportMode': 'usb', 'connected': false});
+      await hid.restoreUsb();
+
+      expect(hid.connected, isFalse);
+      expect(calls.single.method, 'restoreUsb');
+    },
+  );
 }

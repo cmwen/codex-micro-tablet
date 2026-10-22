@@ -63,24 +63,75 @@ class MainActivity : FlutterActivity() {
         override fun onChanged() { emit() }
         override fun onError(message: String) { fail(message) }
     }) }
-    private fun linkReady() = transportMode != "ble" || ble.ready
-    private fun sendReport(device: BluetoothDevice, body: ByteArray): Boolean =
-        if (transportMode == "ble") ble.send(body) else hid?.sendReport(device, MicroWire.REPORT_ID, body) == true
+    private var usbMicRequested = false
+    private var foreground = true
+    private val usb by lazy { UsbHidTransport(this, handler, object : UsbHidTransport.Listener {
+        override fun onRegistered(accepted: Boolean) {
+            if (transportMode != "usb") return
+            registered = accepted; registering = false
+            if (accepted) error = null
+            if (accepted && requested && foreground && usbMicRequested) microphone.start()
+            emit()
+        }
+        override fun onConnection(connected: Boolean) {
+            if (transportMode != "usb") return
+            resetLink(); emit()
+        }
+        override fun onReport(data: ByteArray) { if (transportMode == "usb") receive(data) }
+        override fun onError(message: String) { fail(message) }
+        override fun onChanged() { emit() }
+    }) }
+    private val microphone by lazy { UsbMicrophone(this, handler, object : UsbMicrophone.Listener {
+        override fun onChanged() { emit() }
+        override fun onError(message: String) { fail(message) }
+    }) }
+    private fun connected() = if (transportMode == "usb") usb.connected else host != null
+    private fun linkReady() = when (transportMode) { "ble" -> ble.ready; "usb" -> usb.active && usb.connected; else -> true }
+    private fun recoverUsb() {
+        requested = false; usbMicRequested = false
+        releaseAll("manual restore")
+        microphone.stop()
+        ble.stop()
+        if (permitted()) { host?.let { hid?.disconnect(it) }; hid?.unregisterApp() }
+        registered = false; registering = false; resetLink()
+        usb.recover { restored ->
+            if (restored) {
+                error = null
+                getSharedPreferences("hid", MODE_PRIVATE).edit().putBoolean("usbRecoveryNeeded", false).apply()
+            }
+            emit()
+        }
+        emit()
+    }
+
+    private fun sendReport(body: ByteArray): Boolean = when (transportMode) {
+        "usb" -> usb.send(body)
+        "ble" -> ble.send(body)
+        else -> host?.let { hid?.sendReport(it, MicroWire.REPORT_ID, body) } == true
+    }
     private fun disconnectHost(): Boolean {
+        if (transportMode == "usb") { microphone.stop(); usb.stop(); return true }
         val device = host ?: return false
         return if (transportMode == "ble") { ble.disconnect(); true } else hid?.disconnect(device) == true
     }
     private fun changeTransport(value: String) {
-        require(value == "ble" || value == "classic") { "Choose BLE or Classic HID" }
+        require(value in listOf("ble", "classic", "usb")) { "Choose BLE, Classic or USB HID" }
         if (value == transportMode) return
         requested = false
         releaseAll()
+        microphone.stop()
         if (transportMode == "ble") ble.stop()
-        else { host?.let { hid?.disconnect(it) }; hid?.unregisterApp() }
+        else if (transportMode == "usb") usb.stop()
+        else if (permitted()) { host?.let { hid?.disconnect(it) }; hid?.unregisterApp() }
         registered = false; registering = false; resetLink()
         transportMode = value
         getSharedPreferences("hid", MODE_PRIVATE).edit().putString("transport", value).apply()
-        error = null; emit()
+        error = null
+        if (value == "usb") usb.recover { restored ->
+            if (restored) getSharedPreferences("hid", MODE_PRIVATE).edit().putBoolean("usbRecoveryNeeded", false).apply()
+            emit()
+        }
+        emit()
     }
     private var sink: EventChannel.EventSink? = null
     private var host: BluetoothDevice? = null
@@ -107,18 +158,22 @@ class MainActivity : FlutterActivity() {
          checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED)
 
     private fun snapshot(): Map<String, Any?> = mapOf(
-        "supported" to (Build.VERSION.SDK_INT >= 28 && adapter != null && (transportMode != "ble" || ble.supported)),
+        "supported" to (Build.VERSION.SDK_INT >= 28 && (transportMode == "usb" || (adapter != null && (transportMode != "ble" || ble.supported)))),
         "bluetoothEnabled" to (permitted() && adapter?.isEnabled == true),
-        "registered" to registered, "connected" to (host != null),
-        "hostName" to (if (permitted()) host?.name else null),
+        "registered" to registered, "connected" to connected(),
+        "hostName" to (if (transportMode == "usb") "USB host" else if (permitted()) host?.name else null),
         "hostAddress" to host?.address,
         "discovered" to (discovered && linkReady()), "error" to error,
         "slots" to slots.map { it.toMap() }, "rxReports" to rxReports, "txReports" to txReports,
         "transportMode" to transportMode,
-        "transport" to (if (transportMode == "ble") "Bluetooth LE HID" else "Bluetooth Classic HID"),
+        "transport" to when(transportMode) { "usb" -> "USB HID + microphone"; "ble" -> "Bluetooth LE HID"; else -> "Bluetooth Classic HID" },
+        "usbActive" to usb.active, "usbStatus" to usb.status,
+        "microphoneActive" to microphone.active, "microphoneStatus" to microphone.status,
+        "microphoneFrames" to microphone.frames,
+        "usbRecoveryNeeded" to getSharedPreferences("hid", MODE_PRIVATE).getBoolean("usbRecoveryNeeded", false),
         "advertising" to (transportMode == "ble" && ble.advertising),
         "mtu" to (if (transportMode == "ble") ble.mtu else null),
-        "identityNote" to (if (transportMode == "ble") "BLE advertises Micro vendor 303a / product 8360. Waiting for the Mac's Micro protocol exchange confirms compatibility."
+        "identityNote" to (if (transportMode == "usb") "USB mode uses the stock HID and audio-source drivers. Restore USB to return to the previous configuration." else if (transportMode == "ble") "BLE advertises Micro vendor 303a / product 8360. Waiting for the Mac's Micro protocol exchange confirms compatibility."
             else "Classic HID uses Android's PnP identity. Pairing alone does not confirm Micro compatibility.")
     )
 
@@ -127,7 +182,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        transportMode = getSharedPreferences("hid", MODE_PRIVATE).getString("transport", "ble")?.takeIf { it == "classic" } ?: "ble"
+        transportMode = getSharedPreferences("hid", MODE_PRIVATE).getString("transport", "ble")?.takeIf { it in listOf("classic", "usb") } ?: "ble"
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "codex_micro/hid").setMethodCallHandler { call, result ->
             try {
@@ -135,6 +190,16 @@ class MainActivity : FlutterActivity() {
                     "status" -> result.success(snapshot())
                     "setTransport" -> { changeTransport(call.argument<String>("transport") ?: "ble"); result.success(snapshot()) }
                     "start" -> { requested = true; error = null; startHid(true); result.success(snapshot()) }
+                    "restoreUsb" -> { recoverUsb(); result.success(snapshot()) }
+                    "stopMicrophone" -> { usbMicRequested = false; microphone.stop(); result.success(snapshot()) }
+                    "startMicrophone" -> {
+                        check(transportMode == "usb" && usb.active) { "Start USB mode first" }
+                        usbMicRequested = true
+                        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+                            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 431)
+                        else microphone.start()
+                        result.success(snapshot())
+                    }
                     "discoverable" -> {
                         check(permitted()) { "Enable Bluetooth access first" }
                         check(adapter?.isEnabled == true) { "Turn on Bluetooth first" }
@@ -151,7 +216,7 @@ class MainActivity : FlutterActivity() {
                     }
                     "connect" -> {
                         check(permitted() && registered) { "Start Bluetooth HID before connecting" }
-                        check(transportMode == "classic") { "For BLE, connect from the Mac's Bluetooth settings while the tablet advertises" }
+                        check(transportMode == "classic") { "Connect BLE from the Mac; USB connects when the cable is attached" }
                         val address = call.argument<String>("address") ?: error("Choose a paired host")
                         check(BluetoothAdapter.checkBluetoothAddress(address)) { "Invalid host address" }
                         val device = adapter?.bondedDevices?.firstOrNull { it.address == address } ?: error("Pair this host in Bluetooth settings first")
@@ -169,7 +234,7 @@ class MainActivity : FlutterActivity() {
                         val down = call.argument<Boolean>("pressed") ?: false
                         check(id in 0..16) { "Unknown control" }
                         if (down) {
-                            check(host != null && registered && discovered && linkReady()) { "Waiting for Desktop Micro discovery" }
+                            check(connected() && registered && discovered && linkReady()) { "Waiting for Desktop Micro discovery" }
                             if (pressed.add(id)) {
                                 if (id == 10) Log.i("CodexMicroHid", "Push-to-talk down")
                                 enqueue(MicroWire.key(id, true))
@@ -178,7 +243,7 @@ class MainActivity : FlutterActivity() {
                             // Releases remain valid if discovery/suspend state changed
                             // after keydown. A failed neutral report times out/disconnects.
                             if (id == 10) Log.i("CodexMicroHid", "Push-to-talk up")
-                            if (host != null && registered) enqueue(MicroWire.key(id, false))
+                            if (connected() && registered) enqueue(MicroWire.key(id, false))
                         }
                         result.success(true)
                     }
@@ -207,9 +272,23 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
         else registerReceiver(receiver, filter)
         listening = true
+        if (getSharedPreferences("hid", MODE_PRIVATE).getBoolean("usbRecoveryNeeded", false)) recoverUsb()
     }
 
     private fun startHid(askPermissions: Boolean) {
+        if (transportMode == "usb") {
+            if (!foreground) return
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                if (askPermissions) requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 430)
+                else fail("Allow microphone access before starting USB HID + microphone")
+                return
+            }
+            if (usb.active || registering) { emit(); return }
+            check(getSharedPreferences("hid", MODE_PRIVATE).edit().putBoolean("usbRecoveryNeeded", true).commit())
+            usbMicRequested = true; registering = true
+            usb.start()
+            return
+        }
         if (adapter == null || Build.VERSION.SDK_INT < 28) { fail("Bluetooth HID Device requires Android 9 or newer and Bluetooth hardware"); return }
         if (!permitted()) {
             if (askPermissions && Build.VERSION.SDK_INT >= 31) requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE), 420)
@@ -379,10 +458,9 @@ class MainActivity : FlutterActivity() {
 
     private fun drain(generation: Long) {
         if (generation != txGeneration) return
-        val device = host
-        if (device == null || !registered || outgoing.isEmpty()) { sending = false; return }
+        if (!connected() || !registered || outgoing.isEmpty()) { sending = false; return }
         val next = outgoing.peekFirst()
-        if (sendReport(device, next.body)) {
+        if (sendReport(next.body)) {
             outgoing.removeFirst(); txReports++
             handler.postDelayed({ drain(generation) }, 8)
         } else if (SystemClock.elapsedRealtime() - next.queuedAt < 2000) handler.postDelayed({ drain(generation) }, 40)
@@ -397,6 +475,14 @@ class MainActivity : FlutterActivity() {
 
     /** Complete pending messages, then synchronously release held controls before pause. */
     private fun releaseAll(reason: String = "connection change") {
+        if (transportMode == "usb") {
+            if (usb.active && usb.connected) {
+                for (id in pressed.toList()) MicroWire.frame(MicroWire.key(id, false)).forEach { outgoing.addLast(Outgoing(it)) }
+                pressed.clear()
+                if (!sending && outgoing.isNotEmpty()) { sending = true; drain(txGeneration) }
+            } else { outgoing.clear(); pressed.clear() }
+            emit(); return
+        }
         if (pressed.contains(10)) Log.i("CodexMicroHid", "Push-to-talk released: $reason")
         if (transportMode == "ble") {
             // Notifications are asynchronous. Preserve any fragmented message, enqueue
@@ -457,6 +543,15 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 430) {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                requested = true; startHid(false)
+            } else { requested = false; fail("Microphone permission declined. USB mode was not enabled.") }
+        }
+        if (requestCode == 431) {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED && usb.active) microphone.start()
+            else fail("Microphone access was not granted or USB mode stopped")
+        }
         if (requestCode == 420) {
             if (permitted()) startHid(true) else fail("Bluetooth permission was declined; enable it in Android app settings")
         }
@@ -469,7 +564,10 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onPause() {
+        foreground = false
         releaseAll("activity paused")
+        microphone.stop()
+
         // Android pairing/permission dialogs pause this activity. A surviving BLE
         // link remains discovered; held controls are still released above.
         if (transportMode == "classic") {
@@ -480,10 +578,20 @@ class MainActivity : FlutterActivity() {
         emit()
         super.onPause()
     }
-    override fun onResume() { super.onResume(); if (requested) startHid(false); emit() }
+    override fun onStop() {
+        requested = false; usbMicRequested = false
+        releaseAll("dashboard no longer visible")
+        microphone.stop(); usb.stop()
+        ble.stop()
+        if (permitted()) hid?.unregisterApp()
+        registered = false; registering = false; resetLink(); emit()
+        super.onStop()
+    }
+    override fun onResume() { super.onResume(); foreground = true; if (requested) startHid(false); emit() }
     override fun onDestroy() {
         requested = false
         releaseAll("activity destroyed")
+        microphone.stop(); usb.stop()
         if (permitted()) { ble.stop(); hid?.unregisterApp(); hid?.let { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) } }
         if (listening) unregisterReceiver(receiver)
         handler.removeCallbacksAndMessages(null)

@@ -8,6 +8,7 @@ import 'package:codex_micro_tablet/main.dart';
 class FakeHid extends HidService {
   final keys = <(int, bool)>[];
   int releases = 0;
+  int usbRestores = 0;
   @override
   Future<void> initialize() async {}
   @override
@@ -21,6 +22,14 @@ class FakeHid extends HidService {
   Future<void> releaseAll() async {
     releases++;
   }
+
+  @override
+  Future<void> restoreUsb() async {
+    usbRestores++;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> devices() async => [];
 }
 
 class FakeBridge extends BridgeClient {
@@ -112,6 +121,50 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('agent-0')));
     await tester.tap(find.byKey(const ValueKey('agent-0')));
     expect(hid.keys, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    hid.dispose();
+    bridge.dispose();
+  });
+
+  testWidgets('USB restore stays available while HID is disconnected', (
+    tester,
+  ) async {
+    final hid = FakeHid()..applyState({'transportMode': 'usb'});
+    final bridge = FakeBridge();
+    await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
+    await tester.pumpAndSettle();
+
+    final restore = find.byTooltip('Release controls / restore USB');
+    expect(restore, findsOneWidget);
+    await tester.tap(restore);
+    expect(hid.usbRestores, 1);
+    await tester.pumpWidget(const SizedBox());
+    hid.dispose();
+    bridge.dispose();
+  });
+
+  testWidgets('USB setup shows microphone status and active state', (
+    tester,
+  ) async {
+    final hid = FakeHid()
+      ..applyState({
+        'transportMode': 'usb',
+        'connected': false,
+        'usbActive': true,
+        'microphoneActive': true,
+        'microphoneStatus': 'USB microphone streaming',
+      });
+    final bridge = FakeBridge();
+    await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
+    await tester.pumpAndSettle();
+
+    expect(find.text('USB microphone on'), findsOneWidget);
+    await tester.tap(find.text('Set up'));
+    await tester.pumpAndSettle();
+    expect(find.text('USB microphone streaming'), findsOneWidget);
+    expect(find.text('Mute USB microphone'), findsOneWidget);
+    expect(find.text('Release controls / restore USB'), findsOneWidget);
+
     await tester.pumpWidget(const SizedBox());
     hid.dispose();
     bridge.dispose();

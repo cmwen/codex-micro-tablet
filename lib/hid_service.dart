@@ -19,7 +19,10 @@ class HidService extends ChangeNotifier {
   bool get registered => state['registered'] == true;
   bool get connected => state['connected'] == true;
   bool get discovered => state['discovered'] == true;
-  bool get isBle => state['transportMode'] != 'classic';
+  String get transportMode => state['transportMode']?.toString() ?? 'ble';
+  bool get isBle => transportMode == 'ble';
+  bool get isUsb => transportMode == 'usb';
+  bool get microphoneActive => state['microphoneActive'] == true;
   bool get advertising => state['advertising'] == true;
   bool get ready => connected && discovered;
   String get error => state['error']?.toString() ?? '';
@@ -67,7 +70,12 @@ class HidService extends ChangeNotifier {
   Future<void> refresh() async => await invoke('status');
   Future<void> start() async => await invoke('start');
   Future<void> setTransport(bool ble) async =>
-      await invoke('setTransport', {'transport': ble ? 'ble' : 'classic'});
+      await chooseTransport(ble ? 'ble' : 'classic');
+  Future<void> chooseTransport(String transport) async =>
+      await invoke('setTransport', {'transport': transport});
+  Future<void> restoreUsb() async => await invoke('restoreUsb');
+  Future<void> startMicrophone() async => await invoke('startMicrophone');
+  Future<void> stopMicrophone() async => await invoke('stopMicrophone');
   Future<void> discoverable() async => await invoke('discoverable');
   Future<void> connect(String address) async =>
       await invoke('connect', {'address': address});
