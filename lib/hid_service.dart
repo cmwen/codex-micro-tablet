@@ -19,6 +19,8 @@ class HidService extends ChangeNotifier {
   bool get registered => state['registered'] == true;
   bool get connected => state['connected'] == true;
   bool get discovered => state['discovered'] == true;
+  bool get isBle => state['transportMode'] != 'classic';
+  bool get advertising => state['advertising'] == true;
   bool get ready => connected && discovered;
   String get error => state['error']?.toString() ?? '';
   String get hostName => state['hostName']?.toString() ?? 'Mac';
@@ -64,6 +66,8 @@ class HidService extends ChangeNotifier {
 
   Future<void> refresh() async => await invoke('status');
   Future<void> start() async => await invoke('start');
+  Future<void> setTransport(bool ble) async =>
+      await invoke('setTransport', {'transport': ble ? 'ble' : 'classic'});
   Future<void> discoverable() async => await invoke('discoverable');
   Future<void> connect(String address) async =>
       await invoke('connect', {'address': address});

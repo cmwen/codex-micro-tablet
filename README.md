@@ -13,24 +13,27 @@ This is an unofficial compatibility experiment. It is not an official Codex Micr
 - Optional Wi-Fi dashboard for five-hour/weekly quota, named bridge threads and explicit text submission using the existing FNK0104B bridge.
 - Encrypted bridge token storage backed by Android Keystore; no credentials in source.
 
-## Important compatibility boundary
+## Bluetooth transports
 
-The Android public `BluetoothHidDevice` API exposes **Bluetooth Classic HID**, not the ESP32's BLE HID-over-GATT implementation. It supports the custom report descriptor and input/output callbacks, but cannot set the Bluetooth PnP vendor/product identity through the public API. Desktop may filter for the retail Micro identity and therefore never initiate the discovery exchange with this tablet.
+**BLE HID is the default.** The app publishes a HID-over-GATT service (`1812`), Device Information service with USB-source PnP identity `303a:8360` (version `00b0`), and vendor report 6. This matches the owner's ESP32 BLE diagnostic. Android's GATT server supplies these values; no system Bluetooth files are changed and the app does not execute root commands.
 
-The app distinguishes **HID connected** from **Micro handshake received**. Controls remain disabled until a recognized host discovery/status request arrives. Pairing alone is not proof that Desktop accepted this device. No keyboard shortcuts are silently substituted. Native Micro discovery, slot status, mapped actions and voice must be verified on the target Mac. If Desktop rejects the Android identity, use the Wi-Fi bridge dashboard; complete native acceptance would need host support or a different transport/firmware approach.
+**Classic HID remains selectable.** Android's `BluetoothHidDevice` API supplies its own PnP identity, so the earlier Classic connection did not establish Desktop Micro discovery. Switching transport disconnects the current host and clears discovery.
+
+The app distinguishes **HID connected** from **Micro handshake received**. Controls remain disabled until a recognized host discovery/status request arrives. Pairing alone does not prove Desktop accepted this device. BLE also needs encrypted report access, input notification subscription, and an ATT MTU of at least 66 for the 63-byte reports. The Mac must negotiate the MTU; the tablet cannot force it as a peripheral. Native Micro discovery, slot status, mapped actions and voice still require verification on the target Mac.
 
 Hold to talk and Voice send HID gestures to the Mac. They use the **Mac's selected microphone**; this app does not stream the tablet microphone or impersonate a Bluetooth headset. Desktop owns mappings and approvals. Review the target app before using Approve or Send.
 
 ## Pair with the Mac
 
-1. Open the tablet app and its connection/setup panel. Start HID; grant Bluetooth permissions or enable Bluetooth when requested.
-2. Choose **Make discoverable** and accept Android's system dialog.
-3. In macOS System Settings → Bluetooth, pair with the tablet's system Bluetooth name (normally **Lenovo Tab M8**). Its SDP service name does not rename the tablet.
-4. Select the paired Mac in the app and connect if the Mac did not initiate HID.
-5. Open the desktop app with Micro support. Grant Input Monitoring if requested. Check whether its Micro settings become available and the tablet shows the handshake.
-6. Test Agent 1, a direction (including release), and a harmless mapped action. Verify voice using the Mac microphone. Native compatibility remains unverified until these steps succeed.
+1. Open the tablet app and its connection/setup panel. Select **BLE HID** and tap **Start BLE HID**. Grant Bluetooth permissions or enable Bluetooth when requested.
+2. Confirm **BLE advertising: active**. In macOS System Settings → Bluetooth, pair with **Codex Micro Tablet**. Forget a previous Classic tablet pairing if macOS caches it. While BLE runs, the app temporarily sets Android's Bluetooth name to Codex Micro Tablet and restores the previous name when BLE stops.
+3. Accept any Android pairing dialog. The Mac initiates BLE; the paired-host Connect button is only used in Classic mode.
+4. Open Codex's Micro settings. Look for **Micro discovery: received**, report counters, and host lighting. A link with zero protocol reports is not accepted as working.
+5. Test Agent 1, a direction (including release), and a harmless mapped action. Verify voice using the Mac microphone.
 
-Keep the tablet app visible. Android unregisters HID apps that are not foreground. Leaving the app releases held controls and invalidates Micro state; return and reconnect/start HID as needed. The screen stays awake while the dashboard is visible.
+For Classic comparison, choose **Classic HID**, Start HID, Make discoverable, then pair with the system tablet name and choose the paired Mac.
+
+Keep the tablet app visible. Leaving the app releases held controls and invalidates Micro state. The screen stays awake while the dashboard is visible. This foreground experiment does not promise background or unattended reconnection.
 
 Official retail setup and mappings: [Codex Micro guide](https://learn.chatgpt.com/docs/features/codex-micro). The guide documents the retail hardware, not this tablet.
 

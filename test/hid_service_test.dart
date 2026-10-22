@@ -55,4 +55,29 @@ void main() {
     expect(hid.error, 'Allow Bluetooth access');
     expect(hid.ready, isFalse);
   });
+  test(
+    'BLE transport selection waits for native state and discovery',
+    () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return {
+              'supported': true,
+              'transportMode': call.arguments['transport'],
+              'advertising': true,
+              'connected': false,
+              'discovered': false,
+            };
+          });
+      await hid.setTransport(true);
+      expect(calls.single.method, 'setTransport');
+      expect(calls.single.arguments, {'transport': 'ble'});
+      expect(hid.isBle, isTrue);
+      expect(hid.advertising, isTrue);
+      expect(hid.ready, isFalse);
+      await hid.setTransport(false);
+      expect(hid.isBle, isFalse);
+      expect(hid.ready, isFalse);
+    },
+  );
 }

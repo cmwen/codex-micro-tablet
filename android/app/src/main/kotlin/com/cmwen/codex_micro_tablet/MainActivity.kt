@@ -22,6 +22,7 @@ import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -37,13 +38,50 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** Foreground-only classic Bluetooth HID companion. Android controls PnP identity. */
+/** Foreground-only Micro companion with BLE HOGP and Classic HID transports. */
 @SuppressLint("MissingPermission")
 class MainActivity : FlutterActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val executor = Executor { handler.post(it) }
     private val adapter: BluetoothAdapter? get() = getSystemService(BluetoothManager::class.java)?.adapter
     private var hid: BluetoothHidDevice? = null
+    private var transportMode = "ble"
+    private val ble by lazy { BleHidPeripheral(this, handler, object : BleHidPeripheral.Listener {
+        override fun onRegistered(accepted: Boolean) {
+            if (transportMode != "ble") return
+            registered = accepted; registering = false
+            if (accepted) error = null
+            emit()
+        }
+        override fun onConnection(device: BluetoothDevice?) {
+            if (transportMode != "ble") return
+            resetLink(); host = device; emit()
+        }
+        override fun onReport(data: ByteArray) {
+            if (transportMode == "ble" && host != null) receive(data)
+        }
+        override fun onChanged() { emit() }
+        override fun onError(message: String) { fail(message) }
+    }) }
+    private fun linkReady() = transportMode != "ble" || ble.ready
+    private fun sendReport(device: BluetoothDevice, body: ByteArray): Boolean =
+        if (transportMode == "ble") ble.send(body) else hid?.sendReport(device, MicroWire.REPORT_ID, body) == true
+    private fun disconnectHost(): Boolean {
+        val device = host ?: return false
+        return if (transportMode == "ble") { ble.disconnect(); true } else hid?.disconnect(device) == true
+    }
+    private fun changeTransport(value: String) {
+        require(value == "ble" || value == "classic") { "Choose BLE or Classic HID" }
+        if (value == transportMode) return
+        requested = false
+        releaseAll()
+        if (transportMode == "ble") ble.stop()
+        else { host?.let { hid?.disconnect(it) }; hid?.unregisterApp() }
+        registered = false; registering = false; resetLink()
+        transportMode = value
+        getSharedPreferences("hid", MODE_PRIVATE).edit().putString("transport", value).apply()
+        error = null; emit()
+    }
     private var sink: EventChannel.EventSink? = null
     private var host: BluetoothDevice? = null
     private var registered = false
@@ -69,15 +107,19 @@ class MainActivity : FlutterActivity() {
          checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED)
 
     private fun snapshot(): Map<String, Any?> = mapOf(
-        "supported" to (Build.VERSION.SDK_INT >= 28 && adapter != null),
+        "supported" to (Build.VERSION.SDK_INT >= 28 && adapter != null && (transportMode != "ble" || ble.supported)),
         "bluetoothEnabled" to (permitted() && adapter?.isEnabled == true),
         "registered" to registered, "connected" to (host != null),
         "hostName" to (if (permitted()) host?.name else null),
         "hostAddress" to host?.address,
-        "discovered" to discovered, "error" to error,
+        "discovered" to (discovered && linkReady()), "error" to error,
         "slots" to slots.map { it.toMap() }, "rxReports" to rxReports, "txReports" to txReports,
-        "transport" to "Bluetooth Classic HID",
-        "identityNote" to "Android controls the Bluetooth PnP identity. Desktop automatic Micro discovery is unverified; pairing alone does not confirm compatibility."
+        "transportMode" to transportMode,
+        "transport" to (if (transportMode == "ble") "Bluetooth LE HID" else "Bluetooth Classic HID"),
+        "advertising" to (transportMode == "ble" && ble.advertising),
+        "mtu" to (if (transportMode == "ble") ble.mtu else null),
+        "identityNote" to (if (transportMode == "ble") "BLE advertises Micro vendor 303a / product 8360. Waiting for the Mac's Micro protocol exchange confirms compatibility."
+            else "Classic HID uses Android's PnP identity. Pairing alone does not confirm Micro compatibility.")
     )
 
     private fun emit() { handler.post { sink?.success(snapshot()) } }
@@ -85,16 +127,22 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        transportMode = getSharedPreferences("hid", MODE_PRIVATE).getString("transport", "ble")?.takeIf { it == "classic" } ?: "ble"
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "codex_micro/hid").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
                     "status" -> result.success(snapshot())
+                    "setTransport" -> { changeTransport(call.argument<String>("transport") ?: "ble"); result.success(snapshot()) }
                     "start" -> { requested = true; error = null; startHid(true); result.success(snapshot()) }
                     "discoverable" -> {
                         check(permitted()) { "Enable Bluetooth access first" }
                         check(adapter?.isEnabled == true) { "Turn on Bluetooth first" }
-                        startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120))
+                        if (transportMode == "ble") {
+                            check(registered) { "Start BLE HID first" }
+                            // LE advertising is already connectable; Classic visibility is unrelated.
+                            emit()
+                        } else startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120))
                         result.success(true)
                     }
                     "devices" -> {
@@ -103,6 +151,7 @@ class MainActivity : FlutterActivity() {
                     }
                     "connect" -> {
                         check(permitted() && registered) { "Start Bluetooth HID before connecting" }
+                        check(transportMode == "classic") { "For BLE, connect from the Mac's Bluetooth settings while the tablet advertises" }
                         val address = call.argument<String>("address") ?: error("Choose a paired host")
                         check(BluetoothAdapter.checkBluetoothAddress(address)) { "Invalid host address" }
                         val device = adapter?.bondedDevices?.firstOrNull { it.address == address } ?: error("Pair this host in Bluetooth settings first")
@@ -113,14 +162,13 @@ class MainActivity : FlutterActivity() {
                     }
                     "disconnect" -> {
                         releaseAll()
-                        val device = host
-                        result.success(device != null && hid?.disconnect(device) == true)
+                        result.success(disconnectHost())
                     }
                     "key" -> {
                         val id = call.argument<Int>("id") ?: error("Missing control")
                         val down = call.argument<Boolean>("pressed") ?: false
                         check(id in 0..16) { "Unknown control" }
-                        check(host != null && registered && discovered) { "Waiting for Desktop Micro discovery" }
+                        check(host != null && registered && discovered && linkReady()) { "Waiting for Desktop Micro discovery" }
                         if ((down && pressed.add(id)) || (!down && pressed.remove(id))) enqueue(MicroWire.key(id, down))
                         result.success(true)
                     }
@@ -164,6 +212,12 @@ class MainActivity : FlutterActivity() {
             return
         }
         if (registered || registering) { emit(); return }
+        if (transportMode == "ble") {
+            registering = true
+            Log.i("CodexMicroHid", "Starting BLE HID 1812, USB VID303a PID8360, report6/63")
+            ble.start()
+            return
+        }
         if (hid != null) registerHid()
         else if (!proxyPending) {
             proxyPending = adapter?.getProfileProxy(this, serviceListener, BluetoothProfile.HID_DEVICE) == true
@@ -176,17 +230,17 @@ class MainActivity : FlutterActivity() {
             handler.post {
                 proxyPending = false
                 hid = proxy as BluetoothHidDevice
-                if (requested) registerHid()
+                if (requested && transportMode == "classic") registerHid()
                 emit()
             }
         }
         override fun onServiceDisconnected(profile: Int) {
-            handler.post { hid = null; registered = false; registering = false; resetLink(); emit() }
+            handler.post { hid = null; proxyPending = false; if (transportMode == "classic") { registered = false; registering = false; resetLink(); emit() } }
         }
     }
 
     private fun registerHid() {
-        if (!requested || !permitted() || registered || registering) return
+        if (transportMode != "classic" || !requested || !permitted() || registered || registering) return
         val settings = BluetoothHidDeviceAppSdpSettings(
             "Codex Micro Tablet", "Unofficial Codex Micro compatible tablet controls", "Min", 0.toByte(), MicroWire.DESCRIPTOR
         )
@@ -199,33 +253,36 @@ class MainActivity : FlutterActivity() {
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, accepted: Boolean) {
+            if (transportMode != "classic") return
             registering = false; registered = accepted
             if (!accepted) { resetLink(); error = "HID is inactive. Return to the dashboard and tap Start HID." }
             else { error = null; if (pluggedDevice != null && hid?.getConnectionState(pluggedDevice) == BluetoothProfile.STATE_CONNECTED) host = pluggedDevice }
             emit()
         }
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
+            if (transportMode != "classic") return
             if (state == BluetoothProfile.STATE_CONNECTED) { resetLink(); host = device; error = null }
             else if (state == BluetoothProfile.STATE_DISCONNECTED && host?.address == device.address) resetLink()
             emit()
         }
         override fun onInterruptData(device: BluetoothDevice, reportId: Byte, data: ByteArray) {
-            if (reportId.toInt() == MicroWire.REPORT_ID && host?.address == device.address) receive(data)
+            if (transportMode == "classic" && reportId.toInt() == MicroWire.REPORT_ID && host?.address == device.address) receive(data)
         }
         override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
-            if (id.toInt() == MicroWire.REPORT_ID && host?.address == device.address &&
+            if (transportMode == "classic" && id.toInt() == MicroWire.REPORT_ID && host?.address == device.address &&
                 (type == BluetoothHidDevice.REPORT_TYPE_OUTPUT || type == BluetoothHidDevice.REPORT_TYPE_FEATURE)) {
                 receive(data)
                 hid?.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
             } else hid?.reportError(device, BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID)
         }
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
+            if (transportMode != "classic") return
             if (id.toInt() == MicroWire.REPORT_ID) {
                 val body = ByteArray(MicroWire.BODY_SIZE).apply { this[0] = 2 }
                 hid?.replyReport(device, type, id, if (bufferSize in 1 until body.size) body.copyOf(bufferSize) else body)
             } else hid?.reportError(device, BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID)
         }
-        override fun onVirtualCableUnplug(device: BluetoothDevice) { resetLink(); emit() }
+        override fun onVirtualCableUnplug(device: BluetoothDevice) { if (transportMode == "classic") { resetLink(); emit() } }
     }
 
     private fun resetLink() {
@@ -303,7 +360,7 @@ class MainActivity : FlutterActivity() {
         if (outgoing.size > 128) {
             fail("HID output queue overflow; reconnect the host")
             releaseAll()
-            host?.let { hid?.disconnect(it) }
+            disconnectHost()
             return
         }
         MicroWire.frame(json).forEach { outgoing.addLast(Outgoing(it)) }
@@ -315,19 +372,38 @@ class MainActivity : FlutterActivity() {
         val device = host
         if (device == null || !registered || outgoing.isEmpty()) { sending = false; return }
         val next = outgoing.peekFirst()
-        if (hid?.sendReport(device, MicroWire.REPORT_ID, next.body) == true) {
+        if (sendReport(device, next.body)) {
             outgoing.removeFirst(); txReports++
             handler.postDelayed({ drain(generation) }, 8)
         } else if (SystemClock.elapsedRealtime() - next.queuedAt < 2000) handler.postDelayed({ drain(generation) }, 40)
         else {
-            fail("HID send timed out; reconnect the host")
-            releaseAll(); hid?.disconnect(device)
+            fail(if (transportMode == "ble" && ble.mtu < MicroWire.BODY_SIZE + 3)
+                "BLE MTU ${ble.mtu} is too small; the Mac must negotiate at least 66 bytes"
+                else "HID send timed out; reconnect the host")
+            releaseAll(); disconnectHost()
         }
         emit()
     }
 
     /** Complete pending messages, then synchronously release held controls before pause. */
     private fun releaseAll() {
+        if (transportMode == "ble") {
+            // Notifications are asynchronous. Preserve any fragmented message, enqueue
+            // neutral reports, and disconnect if completion cannot be confirmed.
+            val generation = txGeneration
+            val address = host?.address
+            if (host != null && registered) {
+                for (id in pressed.toList()) MicroWire.frame(MicroWire.key(id, false)).forEach { outgoing.addLast(Outgoing(it)) }
+                pressed.clear()
+                if (!sending && outgoing.isNotEmpty()) { sending = true; drain(generation) }
+                handler.postDelayed({
+                    if (generation == txGeneration && host?.address == address && (outgoing.isNotEmpty() || ble.busy)) {
+                        disconnectHost(); fail("BLE releases did not complete; disconnected to clear held controls")
+                    }
+                }, 1000)
+            } else { outgoing.clear(); pressed.clear() }
+            emit(); return
+        }
         txGeneration++
         sending = false
         val device = host
@@ -361,7 +437,7 @@ class MainActivity : FlutterActivity() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
                 val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-                if (state == BluetoothAdapter.STATE_OFF) { registered = false; registering = false; resetLink() }
+                if (state == BluetoothAdapter.STATE_OFF) { if (transportMode == "ble") ble.stop(); registered = false; registering = false; resetLink() }
                 if (state == BluetoothAdapter.STATE_ON && requested) startHid(false)
             }
             emit()
@@ -383,9 +459,13 @@ class MainActivity : FlutterActivity() {
 
     override fun onPause() {
         releaseAll()
-        discovered = false
-        decoder.reset()
-        slots.forEach { it["present"] = false }
+        // Android pairing/permission dialogs pause this activity. A surviving BLE
+        // link remains discovered; held controls are still released above.
+        if (transportMode == "classic") {
+            discovered = false
+            decoder.reset()
+            slots.forEach { it["present"] = false }
+        }
         emit()
         super.onPause()
     }
@@ -393,7 +473,7 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         requested = false
         releaseAll()
-        if (permitted()) { hid?.unregisterApp(); hid?.let { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) } }
+        if (permitted()) { ble.stop(); hid?.unregisterApp(); hid?.let { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) } }
         if (listening) unregisterReceiver(receiver)
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()

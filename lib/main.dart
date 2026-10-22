@@ -971,8 +971,19 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-              const Text(
-                '1. Start HID and make the tablet discoverable.\n2. On your Mac, open Bluetooth settings and pair with this tablet.\n3. Select the paired Mac below, then open Desktop’s Micro settings.',
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: true, label: Text('BLE HID')),
+                  ButtonSegment(value: false, label: Text('Classic HID')),
+                ],
+                selected: {hid.isBle},
+                onSelectionChanged: (value) => hid.setTransport(value.first),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                hid.isBle
+                    ? '1. Start BLE HID.\n2. On your Mac, open Bluetooth settings and pair with Codex Micro Tablet. Forget an old tablet pairing first if needed.\n3. Open Codex’s Micro settings. Your Mac initiates the BLE connection.'
+                    : '1. Start HID and make the tablet discoverable.\n2. On your Mac, open Bluetooth settings and pair with this tablet.\n3. Select the paired Mac below, then open Codex’s Micro settings.',
                 style: TextStyle(color: muted, height: 1.6),
               ),
               const SizedBox(height: 18),
@@ -983,12 +994,13 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                   FilledButton.icon(
                     onPressed: hid.start,
                     icon: const Icon(Icons.power_settings_new),
-                    label: const Text('Start HID'),
+                    label: Text(hid.isBle ? 'Start BLE HID' : 'Start HID'),
                   ),
-                  OutlinedButton(
-                    onPressed: hid.registered ? hid.discoverable : null,
-                    child: const Text('Make discoverable'),
-                  ),
+                  if (!hid.isBle)
+                    OutlinedButton(
+                      onPressed: hid.registered ? hid.discoverable : null,
+                      child: const Text('Make discoverable'),
+                    ),
                   TextButton(
                     onPressed: hid.settings,
                     child: const Text('Bluetooth settings'),
@@ -1004,6 +1016,11 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                 'Micro discovery: ${hid.discovered ? "received" : "waiting"}  ·  Reports RX ${hid.state['rxReports'] ?? 0} / TX ${hid.state['txReports'] ?? 0}',
                 style: const TextStyle(color: muted, fontSize: 12),
               ),
+              if (hid.isBle)
+                Text(
+                  'BLE advertising: ${hid.advertising ? "active" : "off"}  ·  MTU ${hid.state['mtu'] ?? 23}',
+                  style: const TextStyle(color: muted, fontSize: 12),
+                ),
               if (hid.error.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
@@ -1015,7 +1032,13 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Expanded(child: Text('Paired computers')),
+                  Expanded(
+                    child: Text(
+                      hid.isBle
+                          ? 'Paired computers · connect from Mac'
+                          : 'Paired computers',
+                    ),
+                  ),
                   IconButton(
                     onPressed: _refresh,
                     icon: const Icon(Icons.refresh),
@@ -1034,12 +1057,14 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                   leading: const Icon(Icons.computer),
                   title: Text((device['name'] ?? 'Paired device').toString()),
                   subtitle: Text((device['address'] ?? '').toString()),
-                  trailing: TextButton(
-                    onPressed: hid.registered
-                        ? () => hid.connect(device['address'].toString())
-                        : null,
-                    child: const Text('Connect'),
-                  ),
+                  trailing: hid.isBle
+                      ? null
+                      : TextButton(
+                          onPressed: hid.registered
+                              ? () => hid.connect(device['address'].toString())
+                              : null,
+                          child: const Text('Connect'),
+                        ),
                 ),
               if (hid.connected)
                 TextButton(
@@ -1047,8 +1072,10 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                   child: const Text('Disconnect'),
                 ),
               const SizedBox(height: 16),
-              const Text(
-                'Android can expose the Micro reports, but Desktop may filter device identity. A Bluetooth connection alone does not prove Micro compatibility. This tablet uses Android’s device identity.',
+              Text(
+                hid.isBle
+                    ? 'BLE advertises the Micro vendor and product identity. Pairing and a successful Micro discovery exchange are both needed before controls become available.'
+                    : 'Classic HID uses Android’s device identity. A Bluetooth connection alone does not confirm Micro compatibility.',
                 style: TextStyle(color: muted, fontSize: 12, height: 1.5),
               ),
               const SizedBox(height: 16),

@@ -2,9 +2,9 @@
 
 ## Scope
 
-Flutter dashboard and native Android Classic Bluetooth HID adapter, package `com.cmwen.codex_micro_tablet`, API 28+. This app is independent of the template, Personal Data Bridge and Personal Health Vault repositories. Work was implemented in workspace Run `R-20261021121825-46255e39` and must be reviewed and integrated through `ws`.
+Flutter dashboard and native Android BLE HID-over-GATT plus Classic Bluetooth HID adapters, package `com.cmwen.codex_micro_tablet`, API 28+. This app is independent of the template, Personal Data Bridge and Personal Health Vault repositories. Work was implemented in workspace Run `R-20261021121825-46255e39` and must be reviewed and integrated through `ws`.
 
-The owner-provided reference is https://cmwen.dev/FNK0104B/monitor/. Firmware source inspected at commit `deeaa281a7d842a78c07d18732ee266a6469667c`. Its BLE implementation is a diagnostic, while its normal monitor uses USB Micro and BLE settings. Android Classic HID is a third transport; identical application reports do not establish Desktop transport/identity acceptance.
+The owner-provided reference is https://cmwen.dev/FNK0104B/monitor/. Firmware source inspected at commit `deeaa281a7d842a78c07d18732ee266a6469667c`. Its BLE implementation is a diagnostic, while its normal monitor uses USB Micro and BLE settings. The app now supports BLE HID-over-GATT with the diagnostic identity and retains Classic HID as a fallback. Identical application reports do not establish Desktop transport/identity acceptance.
 
 ## Protocol
 
@@ -50,3 +50,16 @@ On 22 October 2026 (Australia/Sydney), the previously built debug APK installed 
 The actual dashboard rendered on the tablet in portrait. Opening Set up and choosing Start HID changed the native state to **HID profile: registered** without an app crash. Choosing Make discoverable opened Android's 120-second visibility permission dialog; after allowing it, `dumpsys bluetooth_manager` reported `SCAN_MODE_CONNECTABLE_DISCOVERABLE` and the system name **Lenovo Tab M8**. Screenshots are retained in workspace artifacts. No Mac was paired during this verification, and report counters remained RX0/TX0. The debug cold launch took approximately 15 seconds on this older tablet; automated widget timing is not a device performance measurement.
 
 Mac acceptance is still required: pair the tablet, confirm Desktop sends report-6 discovery, inspect host lighting, test AG00–AG05, command mappings, all four directions and neutral release, push-to-talk/Voice using the Mac microphone, reconnect and foreground/background behavior. Android's public API cannot set the PnP VID/PID expected by a host filter; if the Mac does not initiate discovery, successful Android registration alone cannot resolve that limitation. The Wi-Fi bridge remains independent.
+
+
+## BLE transport and rooted tablet follow-up — 22 October 2026
+
+USB ADB verified `su -c id` returns uid=0 on the same stock build. The factory reset removed the earlier app; the BLE build was reinstalled. Root is available for diagnostics, but this implementation uses Android's public GATT server and advertising APIs. No Bluetooth system file, Magisk module, SELinux policy, or partition was modified.
+
+The default transport is BLE HOGP: HID service 1812, HID information 0111/country0/flags1, report map from MicroWire, input/output/feature report 6 and 63-byte bodies. Each report has reference descriptor 2908; input has encrypted CCCD 2902. Device Information 180a publishes PnP characteristic 2a50 with bytes `02 3a 30 60 83 b0 00` (USB-source VID303a/PID8360/version00b0), matching the owner's ESP32 BLE diagnostic. Battery service 180f publishes the capacity sampled at startup. No keyboard or audio report is added.
+
+Service registration is serialized and advertising begins after successful callbacks. Advertising includes HID1812 and a scan response name Codex Micro Tablet. Android's adapter name is temporarily changed while BLE runs and restored on stop. One peer is accepted; report access and CCCD require encryption. Notifications are serialized with bounded timeout, MTU >=66, input subscription, and suspend gating. Unsupported prepared writes are rejected. Offset reads support report-map discovery. Disconnect clears decoder/lighting/held-key state and resumes advertising. A connection with an outstanding notification recreates the GATT server to prevent late callbacks from entering a subsequent connection.
+
+BLE keeps verified discovery across a system pairing dialog if the same connection survives. Releases are queued after partially transmitted messages; failure to finish releases disconnects the peer. Switching transports disconnects and invalidates discovery. The app remains a foreground dashboard, without a background service or root daemon. Final validation passed: Flutter analyzer, all 21 Flutter tests, native MicroWire checks, debug APK build, and diff whitespace checks.
+
+Tablet logs confirmed registration of services 1812, 180a and 180f with status0, followed by successful BLE advertising. End-to-end Mac pairing, PnP enumeration, encrypted report access, negotiated MTU, discovery exchange and actual mapped controls remain hardware acceptance checks until observed. Artifact evidence is kept in the workspace artifact directory, outside this Git repository.
