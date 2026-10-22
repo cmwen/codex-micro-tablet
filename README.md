@@ -1,5 +1,18 @@
 # Codex Micro Tablet
 
+## Landscape dashboard beta
+
+A landscape dashboard inspired by the owner's ESP32 monitor: remaining quota,
+named chats with status, six Desktop slots, and always-visible voice/send
+controls. Tap a chat, then **Message**, to write to that thread.
+
+![Landscape dashboard with sample data](docs/images/landscape-dashboard.png)
+
+See [layout, controls and beta installation](docs/LANDSCAPE_DASHBOARD.md).
+The first GitHub prerelease includes a debug-signed APK for sideload testing;
+production signing is configured separately. Voice controls use the Mac's
+selected microphone on this tablet.
+
 A native Bluetooth and rooted USB HID control surface and Flutter dashboard for an Android tablet beside a Mac. Built from `cmwen/min-android-app-template` and the owner's FNK0104B monitor protocol. Android 9 / API 28 or later is required; the Lenovo Tab M8 TB-8505F runs Android 10 / API 29 and exposes `HidDeviceService`.
 
 This is an unofficial compatibility experiment. It is not an official Codex Micro device or app.
@@ -21,7 +34,7 @@ This is an unofficial compatibility experiment. It is not an official Codex Micr
 
 The app distinguishes **HID connected** from **Micro handshake received**. Controls remain disabled until a recognized host discovery/status request arrives. Pairing alone does not prove Desktop accepted this device. BLE also needs encrypted report access, input notification subscription, and an ATT MTU of at least 66 for the 63-byte reports. The Mac must negotiate the MTU; the tablet cannot force it as a peripheral. Native Micro discovery, slot status, mapped actions and voice still require verification on the target Mac.
 
-Hold to talk starts on touch-down and stays active until that finger lifts or the touch is canceled. Finger movement on this button does not scroll the dashboard; swipe elsewhere to scroll. It shows **Hold active** while pressed. Hold to talk and Voice send HID gestures to the Mac. They use the **Mac's selected microphone**. BLE mode supplies no audio; USB mode can expose the tablet microphone as described below. Desktop owns mappings and approvals. Review the target app before using Approve or Send.
+Hold to talk starts on touch-down and stays active until that finger lifts or the touch is canceled. Finger movement on this button does not scroll the dashboard; swipe elsewhere to scroll. It shows **Hold active** while pressed. Hold to talk and Voice send HID gestures to the Mac. They use the **Mac's selected microphone**. BLE supplies no audio; tablet USB audio is unavailable on the stock firmware as described below. Desktop owns mappings and approvals. Review the target app before using Approve or Send.
 
 ## Pair with the Mac
 

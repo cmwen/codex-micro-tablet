@@ -65,8 +65,8 @@ jobs:
     - name: Run tests with coverage
       run: flutter test --coverage --concurrency=$(nproc)
     
-    - name: Check renamed starter in a disposable copy
-      run: python3 scripts/checks/rename-regression.py
+    - name: Check native Micro protocol
+      run: bash scripts/check-hid-protocol.sh
 
     - name: Build debug APK
       run: flutter build apk --debug

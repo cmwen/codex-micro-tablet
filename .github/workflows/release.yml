@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   release:
+    if: github.event_name == 'workflow_dispatch' || !contains(github.ref_name, '-beta.')
     name: Build & Release
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -131,7 +132,7 @@ jobs:
         BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
       run: |
         set -euo pipefail
-        APP_NAME=min-android-template
+        APP_NAME=codex-micro-tablet
         mkdir -p build/artifacts
         cp build/app/outputs/flutter-apk/app-release.apk \
            "build/artifacts/${APP_NAME}-${VERSION}+${BUILD_NUMBER}.apk"

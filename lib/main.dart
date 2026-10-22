@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'bridge_client.dart';
 import 'hid_service.dart';
 import 'usage_panel.dart';
+import 'landscape_dashboard.dart';
 
 const ink = Color(0xff101b20);
 const panel = Color(0xff1b2a30);
@@ -17,6 +18,12 @@ const muted = Color(0xffa5b4b5);
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+  unawaited(
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]),
+  );
   runApp(const MicroTabletApp());
 }
 
@@ -66,6 +73,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
   String? target;
   String result = '';
   bool sending = false;
+  final _composeRevision = ValueNotifier(0);
 
   @override
   void initState() {
@@ -93,7 +101,10 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      _composeRevision.value++;
+    }
   }
 
   @override
@@ -114,6 +125,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
     if (widget.hid == null) hid.dispose();
     if (widget.bridge == null) bridge.dispose();
     message.dispose();
+    _composeRevision.dispose();
     super.dispose();
   }
 
@@ -212,6 +224,36 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
     body: SafeArea(
       child: LayoutBuilder(
         builder: (context, bounds) {
+          if (bounds.maxWidth > bounds.maxHeight && bounds.maxWidth >= 700) {
+            return LandscapeDashboard(
+              hid: hid,
+              bridge: bridge,
+              target: target,
+              onTarget: (value) => setState(() => target = value),
+              onConnections: _connections,
+              onBridgeSettings: _bridgeSettings,
+              onCompose: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (_) => SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.viewInsetsOf(context).bottom,
+                    ),
+                    child: SizedBox(
+                      height: MediaQuery.sizeOf(context).height * .85,
+                      child: AnimatedBuilder(
+                        animation: Listenable.merge([bridge, _composeRevision]),
+                        builder: (_, _) =>
+                            SingleChildScrollView(child: _bridgePanel()),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
           final wide = bounds.maxWidth >= 800;
           return SingleChildScrollView(
             padding: EdgeInsets.all(wide ? 28 : 20),
@@ -438,7 +480,9 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
                 10,
                 'Hold to talk',
                 Icons.mic_none,
-                subtitle: hid.isUsb ? 'Tablet microphone' : 'Mac microphone',
+                subtitle: hid.isUsb && hid.usbAudioSupported
+                    ? 'Tablet microphone'
+                    : 'Mac microphone',
               ),
             ),
           ),
@@ -665,7 +709,10 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
                   ),
                 ),
             ],
-            onChanged: (value) => setState(() => target = value),
+            onChanged: (value) {
+              setState(() => target = value);
+              _composeRevision.value++;
+            },
           ),
           if (missingTarget)
             const Text(
@@ -686,7 +733,10 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
           FilledButton.icon(
             onPressed: !bridge.connected || sending || missingTarget
                 ? null
-                : () => _send(target),
+                : () async {
+                    await _send(target);
+                    if (mounted) _composeRevision.value++;
+                  },
             icon: sending
                 ? const SizedBox(
                     width: 16,
@@ -884,7 +934,10 @@ class _HoldControlState extends State<HoldControl> {
       child: _pointerControl(
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 90),
-          padding: EdgeInsets.all(widget.compact ? 10 : 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.compact ? 10 : 12,
+            vertical: widget.compact ? 6 : 12,
+          ),
           decoration: BoxDecoration(
             color: pointerHeld || keyboardHeld
                 ? widget.accent.withValues(alpha: .20)

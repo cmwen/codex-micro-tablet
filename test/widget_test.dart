@@ -100,9 +100,21 @@ void main() {
       final bridge = FakeBridge();
       await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
       await tester.pumpAndSettle();
-      expect(find.text('Your desk, connected.'), findsOneWidget);
+      expect(
+        find.text(
+          size.width > size.height ? 'CODEX / MICRO' : 'Your desk, connected.',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Agent 6'), findsOneWidget);
-      expect(find.text('Connect your Mac to get started'), findsOneWidget);
+      expect(
+        find.text(
+          size.width > size.height
+              ? 'Micro disconnected'
+              : 'Connect your Mac to get started',
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       hid.dispose();
@@ -160,7 +172,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('USB microphone on'), findsOneWidget);
-    await tester.tap(find.text('Set up'));
+    await tester.tap(find.byTooltip('Connection settings'));
     await tester.pumpAndSettle();
     expect(find.text('USB microphone streaming'), findsOneWidget);
     expect(find.text('Mute USB microphone'), findsOneWidget);
@@ -188,7 +200,7 @@ void main() {
     await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Set up'));
+    await tester.tap(find.byTooltip('Connection settings'));
     await tester.pumpAndSettle();
     expect(find.text('Start USB HID'), findsOneWidget);
     expect(find.text(unsupportedStatus), findsOneWidget);

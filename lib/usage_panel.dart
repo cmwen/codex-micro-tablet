@@ -13,8 +13,10 @@ class UsagePanel extends StatefulWidget {
     this.error = '',
     this.lastUpdated,
     this.now,
+    this.compact = false,
   });
 
+  final bool compact;
   final Map? usage;
   final String status, error;
   final VoidCallback onSettings, onRefresh;
@@ -45,6 +47,7 @@ class _UsagePanelState extends State<UsagePanel> {
   @override
   Widget build(BuildContext context) {
     final now = (widget.now?.call() ?? DateTime.now()).toLocal();
+    if (widget.compact) return _compact(context, now);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -132,6 +135,154 @@ class _UsagePanelState extends State<UsagePanel> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _compact(BuildContext context, DateTime now) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: const Color(0xff1b2a30),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                widget.status,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Color(0xffa5b4b5)),
+              ),
+            ),
+            SizedBox(
+              width: 40,
+              height: 32,
+              child: IconButton(
+                tooltip: 'Refresh usage',
+                onPressed: widget.onRefresh,
+                icon: const Icon(Icons.refresh, size: 19),
+              ),
+            ),
+            SizedBox(
+              width: 40,
+              height: 32,
+              child: IconButton(
+                tooltip: 'Usage bridge settings',
+                onPressed: widget.onSettings,
+                icon: const Icon(Icons.tune, size: 19),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _compactWindow(
+                '5H LEFT',
+                widget.usage?['five_hour'] as Map?,
+                const Color(0xff00cdeb),
+                now,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _compactWindow(
+                'WEEK LEFT',
+                widget.usage?['weekly'] as Map?,
+                const Color(0xff20e6ac),
+                now,
+              ),
+            ),
+          ],
+        ),
+        if (widget.error.isNotEmpty)
+          Text(
+            widget.error,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.amber, fontSize: 11),
+          ),
+      ],
+    ),
+  );
+
+  Widget _compactWindow(String label, Map? bucket, Color color, DateTime now) {
+    final raw = bucket?['used_percent'];
+    final remaining = raw is num && raw.isFinite && raw >= 0 && raw <= 100
+        ? 100 - raw.toDouble()
+        : null;
+    final rawReset = bucket?['resets_at'];
+    final reset =
+        rawReset is num &&
+            rawReset.isFinite &&
+            rawReset >= 0 &&
+            rawReset <= 8640000000000
+        ? DateTime.fromMillisecondsSinceEpoch(
+            (rawReset * 1000).round(),
+            isUtc: true,
+          )
+        : null;
+    final minutes = reset == null
+        ? null
+        : (reset.difference(now).inMilliseconds / 60000).ceil();
+    final countdown = minutes == null
+        ? 'Reset unavailable'
+        : minutes <= 0
+        ? 'Awaiting reset update'
+        : minutes < 60
+        ? 'Resets in ${minutes}m'
+        : minutes < 1440
+        ? 'Resets in ${minutes ~/ 60}h ${minutes % 60}m'
+        : 'Resets in ${minutes ~/ 1440}d ${(minutes % 1440) ~/ 60}h';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(color: color, fontSize: 10, letterSpacing: 1),
+              ),
+            ),
+            Text(
+              remaining == null ? '—' : '${remaining.round()}%',
+              style: TextStyle(
+                color: color,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Semantics(
+          label:
+              '$label: ${remaining == null ? "unavailable" : "${remaining.round()} percent remaining"}',
+          child: Row(
+            children: List.generate(
+              10,
+              (index) => Expanded(
+                child: Container(
+                  height: 9,
+                  margin: const EdgeInsets.only(right: 3),
+                  color: remaining != null && remaining > index * 10
+                      ? color
+                      : Colors.white10,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          countdown,
+          style: const TextStyle(color: Color(0xffa5b4b5), fontSize: 10),
+        ),
+      ],
     );
   }
 
