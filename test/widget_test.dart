@@ -151,6 +151,7 @@ void main() {
         'transportMode': 'usb',
         'connected': false,
         'usbActive': true,
+        'usbAudioSupported': true,
         'microphoneActive': true,
         'microphoneStatus': 'USB microphone streaming',
       });
@@ -163,6 +164,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('USB microphone streaming'), findsOneWidget);
     expect(find.text('Mute USB microphone'), findsOneWidget);
+    expect(find.text('Release controls / restore USB'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    hid.dispose();
+    bridge.dispose();
+  });
+
+  testWidgets('Unsupported stock USB audio keeps HID setup and restore', (
+    tester,
+  ) async {
+    const unsupportedStatus = 'USB microphone unsupported by this stock kernel';
+    final hid = FakeHid()
+      ..applyState({
+        'transportMode': 'usb',
+        'connected': false,
+        'usbActive': true,
+        'usbAudioSupported': false,
+        'microphoneActive': false,
+        'microphoneStatus': unsupportedStatus,
+      });
+    final bridge = FakeBridge();
+    await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Set up'));
+    await tester.pumpAndSettle();
+    expect(find.text('Start USB HID'), findsOneWidget);
+    expect(find.text(unsupportedStatus), findsOneWidget);
+    expect(find.text('Enable USB microphone'), findsNothing);
+    expect(find.text('Mute USB microphone'), findsNothing);
     expect(find.text('Release controls / restore USB'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());

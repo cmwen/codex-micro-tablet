@@ -465,7 +465,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
       ),
       const SizedBox(height: 10),
       Text(
-        hid.isUsb
+        hid.isUsb && hid.usbAudioSupported
             ? 'Select Codex Micro Tablet as your Mac’s microphone. USB audio is sent only while the microphone is on.'
             : 'Voice controls use your Mac’s microphone. Tablet audio is not transmitted over HID.',
         style: TextStyle(color: muted, fontSize: 12),
@@ -994,7 +994,7 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                 segments: const [
                   ButtonSegment(value: 'ble', label: Text('BLE')),
                   ButtonSegment(value: 'classic', label: Text('Classic')),
-                  ButtonSegment(value: 'usb', label: Text('USB + mic')),
+                  ButtonSegment(value: 'usb', label: Text('USB HID')),
                 ],
                 selected: {hid.transportMode},
                 onSelectionChanged: (value) => hid.chooseTransport(value.first),
@@ -1002,7 +1002,7 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
               const SizedBox(height: 12),
               Text(
                 hid.isUsb
-                    ? 'Connect a data USB cable to your Mac. Allow root access if asked, then start USB HID + microphone. Select Codex Micro Tablet as the Mac’s input device. USB briefly reconnects when modes change; charging continues and ADB is included.'
+                    ? 'Connect a data USB cable to your Mac. Allow root access if asked, then start USB HID. USB briefly reconnects when modes change; charging continues and ADB is included. Voice controls use your Mac’s microphone.'
                     : hid.isBle
                     ? '1. Start BLE HID.\n2. On your Mac, pair with Codex Micro Tablet.\n3. Open Codex’s Micro settings.'
                     : '1. Start HID and make the tablet discoverable.\n2. Pair with the tablet from your Mac.\n3. Select the paired Mac below and open Codex’s Micro settings.',
@@ -1018,7 +1018,7 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                     icon: const Icon(Icons.power_settings_new),
                     label: Text(
                       hid.isUsb
-                          ? 'Start USB HID + microphone'
+                          ? 'Start USB HID'
                           : hid.isBle
                           ? 'Start BLE HID'
                           : 'Start HID',
@@ -1059,7 +1059,7 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
                   hid.state['microphoneStatus']?.toString() ?? 'Microphone off',
                   style: TextStyle(color: hid.microphoneActive ? mint : muted),
                 ),
-                if (hid.state['usbActive'] == true)
+                if (hid.state['usbActive'] == true && hid.usbAudioSupported)
                   TextButton.icon(
                     onPressed: hid.microphoneActive
                         ? hid.stopMicrophone

@@ -49,7 +49,12 @@ class UsbHidTransport(
     }
 
     fun start() {
-        if (active) return
+        if (active) {
+            // A cable detach can close ADB FunctionFS and unbind the composite.
+            // An explicit Start restarts it; no background watchdog is needed.
+            if (!connected) recover { restored -> if (restored) start() }
+            return
+        }
         val token = ++generation
         status = "Starting rooted USB mode"; listener.onChanged()
         // Written before spawning root or changing the gadget, so process death
@@ -59,7 +64,7 @@ class UsbHidTransport(
             try {
                 stopProcess()
                 if (token != generation) return@execute
-                val child = rootCommand(context, listOf("run"))
+                val child = rootCommand(context, listOf("run", java.io.File(context.applicationInfo.nativeLibraryDir, "libmicro_usb_audio.so").path))
                 process = child
                 val outgoing = ArrayBlockingQueue<String>(128)
                 queue = outgoing
@@ -87,7 +92,7 @@ class UsbHidTransport(
                 if (line.length > 8192) error("Oversized USB helper response")
                 val event = JSONObject(line)
                 when (event.optString("event")) {
-                    "ready" -> ui(token) { active = true; status = "USB HID + microphone + ADB enabled"; listener.onRegistered(true); listener.onChanged() }
+                    "ready" -> ui(token) { active = true; status = "USB HID + ADB enabled"; listener.onRegistered(true); listener.onChanged() }
                     "connection" -> ui(token) { connected = event.optBoolean("connected"); listener.onConnection(connected); listener.onChanged() }
                     "report" -> {
                         val data = Base64.decode(event.getString("data"), Base64.DEFAULT)

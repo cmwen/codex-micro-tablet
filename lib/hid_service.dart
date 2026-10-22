@@ -22,6 +22,7 @@ class HidService extends ChangeNotifier {
   String get transportMode => state['transportMode']?.toString() ?? 'ble';
   bool get isBle => transportMode == 'ble';
   bool get isUsb => transportMode == 'usb';
+  bool get usbAudioSupported => state['usbAudioSupported'] == true;
   bool get microphoneActive => state['microphoneActive'] == true;
   bool get advertising => state['advertising'] == true;
   bool get ready => connected && discovered;

@@ -3,13 +3,9 @@ package com.cmwen.codex_micro_tablet
 import androidx.annotation.Keep
 import android.os.Process
 import android.system.Os
-import android.system.OsConstants
-import android.system.ErrnoException
 import android.util.Base64
 import org.json.JSONObject
 import java.io.File
-import java.io.FileDescriptor
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.channels.FileLock
 import java.nio.file.Files
@@ -23,6 +19,9 @@ object UsbRootMain {
     private val gadget = File("/config/usb_gadget/g1")
     private val configuration = File(gadget, "configs/b.1")
     private val recovery = File("/data/local/tmp/codex-micro-usb")
+    private val ffsFunction = File(gadget, "functions/ffs.cmicro")
+    private val ffsMount = File(recovery, "ffs")
+    private var functionFs: UsbFunctionFs? = null
     private val backup = File(recovery, "state.json")
     private const val OWNER = "com.cmwen.codex_micro_tablet.usb.v1"
     private val attributes = listOf(
@@ -31,6 +30,8 @@ object UsbRootMain {
         "functions/hid.gs0/protocol", "functions/hid.gs0/subclass", "functions/hid.gs0/report_length", "functions/hid.gs0/report_desc"
     )
     private val outputLock = Any()
+    private val pendingReports = ArrayDeque<ByteArray>()
+    private var sessionReady = false
     private fun event(kind: String, extra: JSONObject = JSONObject()) = synchronized(outputLock) {
         println(extra.put("event", kind).toString()); System.out.flush()
     }
@@ -53,7 +54,7 @@ object UsbRootMain {
                 when (args.firstOrNull()) {
                     "probe" -> event("probe", JSONObject().put("supported", supported()).put("recoveryPending", backup.exists()))
                     "recover" -> { restore(); event("restored") }
-                    "run" -> runSession()
+                    "run" -> runSession(File(args.getOrNull(1) ?: error("Native library path required")))
                     else -> error("Unknown USB helper operation")
                 }
             } catch (e: Exception) {
@@ -72,9 +73,10 @@ object UsbRootMain {
         val child = java.lang.ProcessBuilder("/system/bin/setprop", name, value).start()
         check(child.waitFor() == 0) { "Could not set temporary USB mode" }
     }
-    private fun ownConfiguration() { property("sys.usb.config", "hid,audio_source,adb") }
+    private fun ownConfiguration() { property("sys.usb.config", "microhid,adb") }
 
     private fun snapshot() {
+        check(!ffsFunction.exists() && !ffsMount.exists()) { "A FunctionFS mount already exists; restore USB before starting" }
         check(supported()) { "This firmware does not provide the required HID, audio-source and ADB gadget functions" }
         val links = JSONObject()
         configuration.listFiles()?.forEach { item ->
@@ -128,26 +130,33 @@ object UsbRootMain {
         error("USB ADB FunctionFS did not settle; original USB mode will be restored")
     }
 
-    private fun activate() {
+    private fun activate(library: File) {
         // A leftover backup always wins: restore before taking another snapshot.
         if (backup.exists()) restore()
         snapshot()
         try {
             val state = JSONObject(backup.readText())
             ownConfiguration(); unbind(); unlinkFunctions()
-            write("functions/hid.gs0/protocol", "0")
-            write("functions/hid.gs0/subclass", "0")
-            write("functions/hid.gs0/report_length", "64")
-            writeBytes("functions/hid.gs0/report_desc", MicroWire.DESCRIPTOR)
+            check(ffsFunction.mkdir() && ffsMount.mkdir()) { "Could not prepare FunctionFS HID" }
+            val mount = java.lang.ProcessBuilder("/system/bin/mount", "-t", "functionfs", "cmicro", ffsMount.path).start()
+            check(mount.waitFor() == 0) { "Could not mount FunctionFS HID" }
+            functionFs = UsbFunctionFs(library) { report ->
+                val body = MicroWire.bleBody(report)
+                if (body != null) synchronized(outputLock) {
+                    if (sessionReady) event("report", JSONObject().put("data", Base64.encodeToString(body, Base64.NO_WRAP)))
+                    else if (pendingReports.size < 128) pendingReports.addLast(body)
+                }
+            }
+            functionFs!!.start(ffsMount.path, MicroWire.DESCRIPTOR)
             write("idVendor", "0x303a"); write("idProduct", "0x8360"); write("bcdDevice", "0x0100")
             write("bDeviceClass", "0"); write("bDeviceSubClass", "0"); write("bDeviceProtocol", "0")
             write("strings/0x409/manufacturer", "Min")
             write("strings/0x409/product", "Codex Micro Tablet")
-            write("configs/b.1/strings/0x409/configuration", "Micro HID + microphone + ADB")
+            write("configs/b.1/strings/0x409/configuration", "Micro HID + ADB")
             // Retain ADB as interface zero without stopping adbd or changing persistent properties.
-            link("f1", "ffs.adb"); link("f2", "hid.gs0"); link("f3", "audio_source.gs3")
+            link("f1", "ffs.adb"); link("f2", "ffs.cmicro")
             bindStable(state.getString("udc"))
-            property("sys.usb.state", "hid,audio_source,adb")
+            property("sys.usb.state", "microhid,adb")
         } catch (e: Exception) {
             try { restore() } catch (rollback: Exception) {
                 throw IllegalStateException("USB setup failed; manual restore remains required: ${rollback.message}", e)
@@ -167,6 +176,13 @@ object UsbRootMain {
         val controller = state.getString("udc")
         check(controller.matches(Regex("[A-Za-z0-9_.-]+"))) { "Invalid USB recovery controller" }
         ownConfiguration(); unbind(); unlinkFunctions()
+        functionFs?.stop(); functionFs = null
+        if (ffsMount.exists()) {
+            val unmount = java.lang.ProcessBuilder("/system/bin/umount", ffsMount.path).start()
+            unmount.waitFor()
+            check(ffsMount.delete()) { "Could not remove FunctionFS mount; recovery remains pending" }
+        }
+        if (ffsFunction.exists()) check(ffsFunction.delete()) { "Could not remove FunctionFS function" }
         if (Base64.decode(saved.getString("functions/hid.gs0/report_desc"), Base64.DEFAULT).isEmpty()) {
             // A zero-length configfs write cannot reliably clear a descriptor.
             // Recreate an originally empty, unlinked HID instance instead.
@@ -186,58 +202,31 @@ object UsbRootMain {
         check(backup.delete()) { "USB restored but its recovery marker could not be removed" }
     }
 
-    private fun runSession() {
-        var input: FileInputStream? = null
-        var writeFd: FileDescriptor? = null
+    private fun runSession(library: File) {
         val running = AtomicBoolean(true)
         try {
-            activate()
-            val number = text("functions/hid.gs0/dev")
-            check(number.matches(Regex("[0-9]+:[0-9]+"))) { "HID device number is unavailable" }
-            val nodeName = File("/sys/dev/char/$number").canonicalFile.name
-            check(nodeName.matches(Regex("hidg[0-9]+"))) { "Unexpected HID device node" }
-            val node = File("/dev/$nodeName")
-            val deviceDeadline = System.nanoTime() + 2_000_000_000L
-            while (!node.exists() && System.nanoTime() < deviceDeadline) Thread.sleep(20)
-            check(node.exists()) { "The HID character device was not created" }
-            input = FileInputStream(node)
-            writeFd = Os.open(node.path, OsConstants.O_WRONLY or OsConstants.O_NONBLOCK, 0)
+            activate(library)
             val controller = JSONObject(backup.readText()).getString("udc")
             var previousConnection: Boolean? = null
-            fun publishConnection(configured: Boolean) = synchronized(outputLock) {
+            fun publishConnection() = synchronized(outputLock) {
+                val configured = runCatching {
+                    File("/sys/class/udc/$controller/state").readText().trim() == "configured"
+                }.getOrDefault(false)
                 if (configured != previousConnection) {
                     event("connection", JSONObject().put("connected", configured))
                     previousConnection = configured
                 }
             }
-            fun isConfigured() = runCatching {
-                File("/sys/class/udc/$controller/state").readText().trim() == "configured"
-            }.getOrDefault(false)
-            // Register before any connection/report event reaches the app.
             event("ready")
-            publishConnection(isConfigured())
-            Thread({
-                val buffer = ByteArray(64)
-                while (running.get()) {
-                    try {
-                        if (input == null) input = FileInputStream(node)
-                        val size = input!!.read(buffer)
-                        if (size <= 0) throw java.io.IOException("USB HID reader closed")
-                        val body = MicroWire.bleBody(buffer.copyOf(size)) ?: continue
-                        synchronized(outputLock) {
-                            // A first OUT report can arrive before the status poll.
-                            if (isConfigured()) publishConnection(true)
-                            event("report", JSONObject().put("data", Base64.encodeToString(body, Base64.NO_WRAP)))
-                        }
-                    } catch (_: Exception) {
-                        runCatching { input?.close() }; input = null
-                        if (running.get()) Thread.sleep(100)
-                    }
-                }
-            }, "micro-usb-reports").apply { isDaemon = true; start() }
+            publishConnection()
+            synchronized(outputLock) {
+                sessionReady = true
+                pendingReports.forEach { event("report", JSONObject().put("data", Base64.encodeToString(it, Base64.NO_WRAP))) }
+                pendingReports.clear()
+            }
             Thread({
                 while (running.get()) {
-                    publishConnection(isConfigured())
+                    publishConnection()
                     Thread.sleep(250)
                 }
             }, "micro-usb-connection").apply { isDaemon = true; start() }
@@ -249,22 +238,12 @@ object UsbRootMain {
                 if (command.optString("command") == "stop") break
                 val body = Base64.decode(command.getString("body"), Base64.DEFAULT)
                 check(body.size == MicroWire.BODY_SIZE) { "Invalid HID report length" }
-                val report = byteArrayOf(MicroWire.REPORT_ID.toByte()) + body
-                val deadline = System.nanoTime() + 500_000_000L
-                while (true) {
-                    try {
-                        check(Os.write(writeFd, report, 0, report.size) == report.size) { "Short USB HID write" }
-                        break
-                    } catch (e: ErrnoException) {
-                        if (e.errno != OsConstants.EAGAIN || System.nanoTime() >= deadline) throw e
-                        Thread.sleep(5)
-                    }
+                check(functionFs?.send(byteArrayOf(MicroWire.REPORT_ID.toByte()) + body) == true) {
+                    "USB HID input write failed"
                 }
             }
         } finally {
             running.set(false)
-            runCatching { writeFd?.let { Os.close(it) } }
-            runCatching { input?.close() }
             restore()
             event("closed")
         }

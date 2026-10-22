@@ -63,6 +63,7 @@ class MainActivity : FlutterActivity() {
         override fun onChanged() { emit() }
         override fun onError(message: String) { fail(message) }
     }) }
+    private val usbAudioSupported = false
     private var usbMicRequested = false
     private var foreground = true
     private val usb by lazy { UsbHidTransport(this, handler, object : UsbHidTransport.Listener {
@@ -166,14 +167,15 @@ class MainActivity : FlutterActivity() {
         "discovered" to (discovered && linkReady()), "error" to error,
         "slots" to slots.map { it.toMap() }, "rxReports" to rxReports, "txReports" to txReports,
         "transportMode" to transportMode,
-        "transport" to when(transportMode) { "usb" -> "USB HID + microphone"; "ble" -> "Bluetooth LE HID"; else -> "Bluetooth Classic HID" },
+        "transport" to when(transportMode) { "usb" -> "USB HID"; "ble" -> "Bluetooth LE HID"; else -> "Bluetooth Classic HID" },
         "usbActive" to usb.active, "usbStatus" to usb.status,
-        "microphoneActive" to microphone.active, "microphoneStatus" to microphone.status,
+        "usbAudioSupported" to usbAudioSupported,
+        "microphoneActive" to microphone.active, "microphoneStatus" to "USB microphone unavailable with this tablet’s stock driver",
         "microphoneFrames" to microphone.frames,
         "usbRecoveryNeeded" to getSharedPreferences("hid", MODE_PRIVATE).getBoolean("usbRecoveryNeeded", false),
         "advertising" to (transportMode == "ble" && ble.advertising),
         "mtu" to (if (transportMode == "ble") ble.mtu else null),
-        "identityNote" to (if (transportMode == "usb") "USB mode uses the stock HID and audio-source drivers. Restore USB to return to the previous configuration." else if (transportMode == "ble") "BLE advertises Micro vendor 303a / product 8360. Waiting for the Mac's Micro protocol exchange confirms compatibility."
+        "identityNote" to (if (transportMode == "usb") "USB HID uses FunctionFS. Use your Mac’s microphone; the stock USB audio driver is incompatible." else if (transportMode == "ble") "BLE advertises Micro vendor 303a / product 8360. Waiting for the Mac's Micro protocol exchange confirms compatibility."
             else "Classic HID uses Android's PnP identity. Pairing alone does not confirm Micro compatibility.")
     )
 
@@ -193,6 +195,7 @@ class MainActivity : FlutterActivity() {
                     "restoreUsb" -> { recoverUsb(); result.success(snapshot()) }
                     "stopMicrophone" -> { usbMicRequested = false; microphone.stop(); result.success(snapshot()) }
                     "startMicrophone" -> {
+                        check(usbAudioSupported) { "USB microphone is unavailable with this tablet’s stock driver" }
                         check(transportMode == "usb" && usb.active) { "Start USB mode first" }
                         usbMicRequested = true
                         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
@@ -278,14 +281,9 @@ class MainActivity : FlutterActivity() {
     private fun startHid(askPermissions: Boolean) {
         if (transportMode == "usb") {
             if (!foreground) return
-            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                if (askPermissions) requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 430)
-                else fail("Allow microphone access before starting USB HID + microphone")
-                return
-            }
-            if (usb.active || registering) { emit(); return }
+            if ((usb.active && usb.connected) || registering) { emit(); return }
             check(getSharedPreferences("hid", MODE_PRIVATE).edit().putBoolean("usbRecoveryNeeded", true).commit())
-            usbMicRequested = true; registering = true
+            usbMicRequested = false; registering = true
             usb.start()
             return
         }
