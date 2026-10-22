@@ -1,58 +1,15 @@
-# Documentation Website (Astro)
+# Codex Micro Tablet website
 
-This folder contains an Astro-based documentation site for the repository, deployed to GitHub Pages.
+Astro product site for Codex Micro Tablet. Source lives in `src/`; static output
+is `dist/`. Use Node24 and run `npm ci`, `npm run build`, and `npm run preview`.
 
-**Note**: This site uses Astro v7 and requires Node >=24.0.0 (use Node 24 LTS) to run locally. Astro itself requires Node >=22.22.0.
+Canonical URL: https://cmwen.dev/codex-micro-tablet/ (GitHub Pages).
+The project base is `/codex-micro-tablet`; internal routes and screenshot assets
+must keep that prefix. The screenshot is a Flutter render with sample data.
 
-## Quick Start
+The website deploys through `.github/workflows/deploy-website.yml` after a
+published release, a matching successful release workflow, or manual dispatch.
+The repository Pages source must be GitHub Actions (`build_type: workflow`).
 
-```bash
-cd astro
-npm ci
-npm run dev      # Local development
-npm run build    # Generate dist/
-npm run preview  # Preview build
-```
-
-## Configuration
-
-Update `astro.config.mjs` for your GitHub Pages deployment:
-
-```js
-const GITHUB_USERNAME = 'your-username';
-const REPO_NAME = 'your-repo-name';
-```
-
-Your site will be deployed to: `https://your-username.github.io/your-repo-name/`
-
-## Features
-
-- Small Startlight-inspired theme (dark, readable, fast)
-- Minimal pages: Home, About, Install, Releases
-- Auto-deploy to GitHub Pages via `.github/workflows/deploy-website.yml`
-- Published after successful release workflow completion, a published release event, or manual workflow dispatch
-
-## Flutter Project Commands
-
-For app build instructions, from the repo root:
-
-```bash
-# Get dependencies
-flutter pub get
-
-# Run in development
-flutter run
-
-# Build a developer APK
-flutter build apk --debug
-
-# After configuring private release signing (see ../SIGNING.md):
-flutter build apk --release  # Signed Android APK
-flutter build appbundle      # Signed Play Store bundle
-```
-
-## Releases
-
-Download prebuilt artifacts from GitHub Releases:
-https://github.com/cmwen/min-android-app-template/releases/latest
-
+The download page points to an explicit beta tag because GitHub's `/latest`
+route excludes prereleases. Update that tag and APK name together for each beta.

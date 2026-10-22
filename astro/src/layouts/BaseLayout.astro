@@ -1,21 +1,24 @@
 ---
-import '../styles.css'
-import Header from '../components/Header.astro'
-import Footer from '../components/Footer.astro'
-const { title } = Astro.props
+import '../styles.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+const { title } = Astro.props;
 ---
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title ? `${title} — Startlight` : 'Startlight'}</title>
+    <meta name="description" content="Turn an Android tablet into a landscape Codex dashboard with live quota, named chats, Bluetooth and rooted USB HID controls." />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <title>{title ? `${title} — Codex Micro Tablet` : 'Codex Micro Tablet'}</title>
   </head>
   <body>
-    <main class="container">
-      <Header title={title ?? 'Startlight'} />
-      <slot />
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="container">
+      <Header />
+      <main id="content"><slot /></main>
       <Footer />
-    </main>
+    </div>
   </body>
 </html>

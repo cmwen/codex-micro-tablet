@@ -1,54 +1,25 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro'
+import BaseLayout from '../layouts/BaseLayout.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
-<BaseLayout title="min-flutter-template">
-  <section>
-    <h2>Welcome 👋</h2>
-    <p class="lead">A minimal <strong>Flutter</strong> app template for cross-platform development. Build for Android, iOS, Web, and Desktop from a single codebase.</p>
-
-    <div class="card">
-      <h3>What's here</h3>
-      <ul>
-        <li>Short project overview and docs link</li>
-        <li>Quick links to repository and CI</li>
-        <li>Light Startlight-inspired theme</li>
-      </ul>
+<BaseLayout title="Your landscape dashboard">
+  <section class="hero">
+    <p class="eyebrow">ANDROID TABLET DASHBOARD · PUBLIC BETA</p>
+    <h1>See what’s happening.<br />Keep the next action close.</h1>
+    <p class="lead">Live quota, named chats and large touch controls beside your Mac. Inspired by the ESP32 Codex monitor, built for a landscape Android tablet.</p>
+    <div class="actions">
+      <a class="button" href={`${base}/releases/`}>Download the beta</a>
+      <a class="button secondary" href={`${base}/install/`}>Set up your tablet</a>
     </div>
-
-    <div class="card">
-      <h3>Features</h3>
-      <ul>
-        <li>Flutter 3.38.7 with Material Design 3</li>
-        <li>Cross-platform: Android, iOS, Web, macOS, Linux, Windows</li>
-        <li>Simple dependency management with pubspec.yaml</li>
-        <li>CI/CD workflows with signed release support</li>
-        <li>AI-friendly customization points</li>
-      </ul>
-    </div>
-
-    <div class="card">
-      <h3>Download / Release</h3>
-      <p class="lead">Get a packaged release from GitHub Releases (APK, App Bundle, Web).</p>
-      <p><a href="https://github.com/cmwen/min-android-app-template/releases/latest" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Download latest release →</a></p>
-    </div>
-
-    <div class="card">
-      <h3>Quick start</h3>
-      <p class="lead">Get started in minutes with Flutter.</p>
-      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;margin-top:8px;overflow:auto">git clone https://github.com/cmwen/min-android-app-template.git
-cd min-android-app-template
-flutter pub get
-flutter run</pre>
-      <p style="margin-top:8px"><a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/install/`} style="color:var(--accent);text-decoration:none">Open full install guide →</a></p>
-    </div>
-
-    <div class="card">
-      <h3>Next steps</h3>
-      <ol>
-        <li>Customize <code>lib/main.dart</code> with your app</li>
-        <li>Update <code>pubspec.yaml</code> with your app name</li>
-        <li>Configure <code>astro/astro.config.mjs</code> for your GitHub Pages URL</li>
-      </ol>
-    </div>
+    <figure>
+      <img class="dashboard" src={`${base}/landscape-dashboard.png`} width="1280" height="800" alt="Landscape dashboard showing remaining quota, live chats, six Desktop agent slots, command keys and voice controls." />
+      <figcaption>Flutter-rendered preview with sample data. Actual chats and lighting come from your connections.</figcaption>
+    </figure>
   </section>
+  <section class="grid" aria-label="Dashboard features">
+    <article class="card"><h2>See your workspace</h2><p>Five-hour and weekly quota remaining, reset countdowns, and named chats with running or attention states from your monitor bridge.</p></article>
+    <article class="card"><h2>Act from your desk</h2><p>Six Desktop Micro slots, command keys and directional controls. Hold to talk, Voice and Send stay within easy reach.</p></article>
+    <article class="card"><h2>Choose your connection</h2><p>Bluetooth LE is the default. Rooted USB HID is available experimentally on the tested Lenovo Tab M8. Wi-Fi bridge status works independently.</p></article>
+  </section>
+  <section class="card"><h2>Voice uses your Mac microphone</h2><p>The tablet sends Micro gestures to the Mac. Its stock USB audio driver does not expose a usable tablet microphone. Select your preferred input on the Mac.</p><p><a href={`${base}/about/`}>Read capabilities and current limits →</a></p></section>
 </BaseLayout>
