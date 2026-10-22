@@ -16,6 +16,17 @@ public final class MicroWireCheck {
             check(decoder.feed(report, received::add), "valid report");
         }
         check(received.size() == 1 && received.get(0).equals(json), "UTF8 fragmented round trip");
+        byte[] prefixed = new byte[64]; prefixed[0] = 6;
+        System.arraycopy(reports.get(0), 0, prefixed, 1, 63);
+        check(java.util.Arrays.equals(MicroWire.bleBody(prefixed), reports.get(0)), "macOS BLE report ID stripped");
+        byte[] padded = java.util.Arrays.copyOf(reports.get(0), 64);
+        check(java.util.Arrays.equals(MicroWire.bleBody(padded), reports.get(0)), "BLE trailing zero padding stripped");
+        prefixed[0] = 7;
+        check(MicroWire.bleBody(prefixed) == null, "wrong BLE report ID rejected");
+        padded[63] = 1;
+        check(MicroWire.bleBody(padded) == null, "nonzero BLE excess rejected");
+        check(MicroWire.bleBody(new byte[65]) == null, "oversized BLE write rejected");
+        check(java.util.Arrays.equals(MicroWire.bleBody(reports.get(0)), reports.get(0)), "standard BLE body retained");
         check(!decoder.feed(new byte[]{2,62}, received::add), "bad length reset");
         for (byte[] report : MicroWire.frame("{\"a\":1}{\"b\":2}")) decoder.feed(report, received::add);
         check(received.size() == 3, "multiple newline-free calls");

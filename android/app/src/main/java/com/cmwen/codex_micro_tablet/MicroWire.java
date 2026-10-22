@@ -44,6 +44,20 @@ public final class MicroWire {
 
     public interface Consumer { void accept(String json); }
 
+    /** macOS can retain the report ID when writing a report characteristic. */
+    public static byte[] bleBody(byte[] value) {
+        if (value == null) return null;
+        if (value.length == BODY_SIZE + 1) {
+            if ((value[0] & 255) == REPORT_ID && value[1] == 2)
+                return java.util.Arrays.copyOfRange(value, 1, value.length);
+            // Some HID backends pad the body to their 64-byte transfer size.
+            if (value[0] == 2 && value[BODY_SIZE] == 0)
+                return java.util.Arrays.copyOf(value, BODY_SIZE);
+            return null;
+        }
+        return value.length >= 2 && value.length <= BODY_SIZE ? value.clone() : null;
+    }
+
     public static final class Decoder {
         private final ByteArrayOutputStream data = new ByteArrayOutputStream();
         private int depth;

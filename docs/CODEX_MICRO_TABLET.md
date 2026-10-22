@@ -63,3 +63,8 @@ Service registration is serialized and advertising begins after successful callb
 BLE keeps verified discovery across a system pairing dialog if the same connection survives. Releases are queued after partially transmitted messages; failure to finish releases disconnects the peer. Switching transports disconnects and invalidates discovery. The app remains a foreground dashboard, without a background service or root daemon. Final validation passed: Flutter analyzer, all 21 Flutter tests, native MicroWire checks, debug APK build, and diff whitespace checks.
 
 Tablet logs confirmed registration of services 1812, 180a and 180f with status0, followed by successful BLE advertising. End-to-end Mac pairing, PnP enumeration, encrypted report access, negotiated MTU, discovery exchange and actual mapped controls remain hardware acceptance checks until observed. Artifact evidence is kept in the workspace artifact directory, outside this Git repository.
+
+
+### macOS report framing follow-up
+
+The Mac recognized the tablet but reported connected with limited functionality. Tablet logs confirmed MTU517, encrypted input CCCD subscription, and repeated 64-byte output writes; the original BLE length check rejected these before protocol decoding. The BLE boundary now accepts a 64-byte report only when it carries report ID6 before a 63-byte body, or a zero-padded 63-byte body. Other IDs, nonzero excess data and oversized writes remain rejected. Standard BLE bodies and Classic reports retain their existing format. Native regression checks cover these cases. Header-only diagnostics record the first three bytes without JSON payload logging. End-to-end recovery must be verified after reconnecting the Mac.

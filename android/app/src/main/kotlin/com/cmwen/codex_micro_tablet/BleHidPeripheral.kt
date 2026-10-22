@@ -255,13 +255,14 @@ class BleHidPeripheral(
         }
         override fun onCharacteristicWriteRequest(device: BluetoothDevice, requestId: Int, characteristic: BluetoothGattCharacteristic,
             preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray) = onMain(token) {
-            Log.i("CodexMicroHid", "BLE write ${characteristic.uuid} length=${value.size} prepared=$preparedWrite offset=$offset")
+            Log.i("CodexMicroHid", "BLE write ${characteristic.uuid} length=${value.size} header=${value.take(3).joinToString(":") { "%02x".format(it.toInt() and 255) }} prepared=$preparedWrite offset=$offset")
             var status = validateWrite(device, preparedWrite, offset)
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 when {
                     characteristic === output || characteristic === feature -> {
-                        if (value.size !in 2..MicroWire.BODY_SIZE) status = BluetoothGatt.GATT_INVALID_ATTRIBUTE_LENGTH
-                        else listener.onReport(value.copyOf())
+                        val body = MicroWire.bleBody(value)
+                        if (body == null) status = BluetoothGatt.GATT_INVALID_ATTRIBUTE_LENGTH
+                        else listener.onReport(body)
                     }
                     characteristic.uuid == uuid("2a4c") -> {
                         if (value.size != 1 || value[0].toInt() !in 0..1) status = BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
