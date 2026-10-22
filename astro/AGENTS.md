@@ -12,16 +12,17 @@ Keep these instructions concise and actionable — follow them when making edits
 
 ## GitHub Pages URL Configuration
 
-The site URL is configured in `astro/astro.config.mjs`. To customize for your deployment:
+The canonical site and project prefix are configured in `astro/astro.config.mjs`:
 
-1. Edit `GITHUB_USERNAME` and `REPO_NAME` constants at the top of the file
-2. The site will be deployed to: `https://<GITHUB_USERNAME>.github.io/<REPO_NAME>/`
-
-Example:
 ```js
-const GITHUB_USERNAME = 'your-username';
-const REPO_NAME = 'your-repo-name';
+site: 'https://cmwen.dev',
+base: '/codex-micro-tablet',
+trailingSlash: 'always',
 ```
+
+GitHub Pages inherits the owner's `cmwen.dev` domain. Use `import.meta.env.BASE_URL`
+for internal links and public assets. The deployed URL is
+https://cmwen.dev/codex-micro-tablet/.
 
 ## Local environment & expectations
 
@@ -74,20 +75,8 @@ const REPO_NAME = 'your-repo-name';
 
 ## Metadata & configuration
 
-- Update `astro.config.mjs` if the site URL or other config changes are required. It currently contains the `site` and `base` values for GitHub Pages.
-
-```js
-// astro/astro.config.mjs
-const GITHUB_USERNAME = 'cmwen';
-const REPO_NAME = 'codex-micro-tablet';
-
-export default defineConfig({
-  site: `https://${GITHUB_USERNAME}.github.io`,
-  base: `/${REPO_NAME}`,
-});
-```
-
-If you change these values, ensure CI and README are consistent and update links where necessary.
+Keep the `site` and `base` settings above aligned with GitHub Pages and README.
+Do not add a project CNAME when the domain is inherited from the owner's site.
 
 ## Review & release notes for maintainers
 
