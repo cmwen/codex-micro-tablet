@@ -1,6 +1,6 @@
 # Agents guide — astro/
 
-This file explains how AI agents and automated tools should work with the `astro/` Astro project for the `min-android-app-template` repository.
+This file explains how AI agents and automated tools should work with the `astro/` Astro project for the `codex-micro-tablet` repository.
 
 Keep these instructions concise and actionable — follow them when making edits, testing locally, or changing CI/deployment behavior.
 
@@ -79,7 +79,7 @@ const REPO_NAME = 'your-repo-name';
 ```js
 // astro/astro.config.mjs
 const GITHUB_USERNAME = 'cmwen';
-const REPO_NAME = 'min-android-app-template';
+const REPO_NAME = 'codex-micro-tablet';
 
 export default defineConfig({
   site: `https://${GITHUB_USERNAME}.github.io`,

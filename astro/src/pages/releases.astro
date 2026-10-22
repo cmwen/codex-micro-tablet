@@ -1,24 +1,12 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro'
+import BaseLayout from '../layouts/BaseLayout.astro';
+const release = 'https://github.com/cmwen/codex-micro-tablet/releases';
+const tag = 'v0.2.0-beta.2';
 ---
-
-<BaseLayout title="Releases">
-  <section>
-    <h2>Releases & Downloads</h2>
-
-    <div class="card">
-      <p class="lead">Download the project artifacts (APK / AAB / Web) from GitHub Releases.</p>
-      <p><a href="https://github.com/cmwen/min-android-app-template/releases/latest" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Open latest release on GitHub →</a></p>
-    </div>
-
-    <div class="card">
-      <h3>If you built from source</h3>
-      <ul>
-        <li>Android APK: <code>flutter build apk</code></li>
-        <li>Android App Bundle: <code>flutter build appbundle</code></li>
-        <li>iOS: <code>flutter build ios</code></li>
-        <li>Web: <code>flutter build web</code></li>
-      </ul>
-    </div>
-  </section>
+<BaseLayout title="Releases and downloads">
+  <h1>Download Codex Micro Tablet</h1>
+  <p class="lead">Public beta for Android 9 or later. Free source code, landscape controls and the existing monitor bridge.</p>
+  <section class="card"><p class="eyebrow">VERSION 0.2.0 · BETA 2</p><h2>Landscape dashboard and public website</h2><p>Remaining-quota bars, named chats, Desktop slots and persistent voice/send controls. This release adds the product website and install guide and repairs the Pages build.</p><div class="actions"><a class="button" href={`${release}/download/${tag}/codex-micro-tablet-0.2.0-beta.2-debug.apk`}>Download Android APK</a><a class="button secondary" href={`${release}/tag/${tag}`} target="_blank" rel="noopener">Release notes and checksums ↗</a></div><p>Debug-signed APK for sideload testing. This is not a production-signed or Play Store build. Voice controls use the Mac’s selected microphone.</p></section>
+  <section class="card"><h2>Before updating</h2><p>Android requires matching signing certificates for in-place updates. If the certificate differs, uninstalling the previous app removes its local settings. Keep your bridge address and key somewhere private before doing that.</p><p>The preview image uses sample data. USB audio from the tablet is unsupported on its stock firmware; rooted USB HID remains experimental.</p></section>
+  <p><a href={release} target="_blank" rel="noopener">All releases on GitHub →</a></p>
 </BaseLayout>

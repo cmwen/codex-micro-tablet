@@ -1,18 +1,11 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro'
+import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 <BaseLayout title="About">
-  <section>
-    <h2>About this site</h2>
-    <p>This small site is a lightweight static landing for the <code>min-android-app-template</code> Flutter repository. It's built with Astro and a Startlight-inspired theme so it's fast and easy to maintain.</p>
-
-    <div class="card">
-      <h3>How it works</h3>
-      <ul>
-        <li>Source in <code>/astro</code></li>
-        <li>Build uses <code>npm run build</code> to generate a static <code>dist/</code> folder</li>
-        <li>CI workflow deploys <code>dist/</code> to GitHub Pages when a GitHub Release is published (or on manual dispatch)</li>
-      </ul>
-    </div>
-  </section>
+  <h1>A tablet companion for your Codex desk</h1>
+  <p class="lead">Codex Micro Tablet adapts the owner’s ESP32 monitor to a native Android Flutter app. It is an unofficial compatibility experiment.</p>
+  <section class="card"><h2>Two independent connections</h2><p>Bluetooth LE HID or experimental rooted USB HID sends gestures to Desktop’s Micro mappings. A separate Wi-Fi connection to the existing FNK0104B monitor-server supplies usage and named chats, and accepts explicit text messages.</p><p>Selecting a bridge chat targets the message composer. It does not change the six Desktop slot assignments. Bridge messages do not grant approvals.</p></section>
+  <section class="card"><h2>What has been verified</h2><p>BLE discovery and bidirectional reports were observed on the Lenovo Tab M8 TB-8505F. USB Micro discovery, buttons and Hold to talk using the Mac microphone were owner-confirmed through a USB hub.</p><p>The landscape UI passes automated layout and interaction checks. The new landscape screen still needs physical tablet acceptance. Reconnect and long-running behaviour remain beta testing areas.</p></section>
+  <section class="card"><h2>Current limits</h2><ul><li>Android 9 or later is required. USB support is specific to the tested rooted stock Lenovo device.</li><li>The dashboard must stay visible. Leaving it stops the transport and releases held controls.</li><li>Tablet USB microphone audio is unavailable on the stock kernel. Voice actions use the Mac’s selected microphone.</li><li>If BLE connects but Micro discovery waits, a Mac Bluetooth off/on cycle restored the observed stalled session. That does not establish a macOS bug.</li><li>Downloads are explicitly debug-signed beta APKs. Production signing and Play Store distribution are not configured.</li></ul></section>
+  <p><a href="https://github.com/cmwen/codex-micro-tablet/blob/main/docs/CODEX_MICRO_TABLET.md" target="_blank" rel="noopener">Technical findings and hardware evidence →</a></p>
 </BaseLayout>

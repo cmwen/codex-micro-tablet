@@ -22,7 +22,7 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: bash scripts/check-hid-protocol.sh
-      - run: flutter build apk --debug --build-name=0.2.0-beta.1 --build-number=2
+      - run: flutter build apk --debug --build-name=0.2.0-beta.2 --build-number=3
       - uses: actions/upload-artifact@v7
         with:
           name: codex-micro-tablet-beta-debug

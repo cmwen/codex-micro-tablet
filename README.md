@@ -1,5 +1,7 @@
 # Codex Micro Tablet
 
+[Website and setup guide](https://cmwen.dev/codex-micro-tablet/) · [Public beta downloads](https://github.com/cmwen/codex-micro-tablet/releases)
+
 ## Landscape dashboard beta
 
 A landscape dashboard inspired by the owner's ESP32 monitor: remaining quota,

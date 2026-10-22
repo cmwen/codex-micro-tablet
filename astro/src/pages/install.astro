@@ -1,66 +1,17 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro'
+import BaseLayout from '../layouts/BaseLayout.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
-
-<BaseLayout title="Install / Getting Started">
-  <section>
-    <h2>Install & build guide</h2>
-
-    <p class="lead">This quick guide shows how to get the Flutter template running locally and how to build release artifacts.</p>
-
-    <div class="card">
-      <h3>Prerequisites</h3>
-      <ul>
-        <li>Flutter SDK 3.38.7 (pinned and tested)</li>
-        <li>Dart 3.10.7 (bundled with Flutter)</li>
-        <li>For Android: Android Studio or Android SDK</li>
-        <li>Node 24 LTS (for the website, not required for the app)</li>
-      </ul>
-    </div>
-
-    <div class="card">
-      <h3>Clone the repository</h3>
-      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">git clone https://github.com/cmwen/min-android-app-template.git
-cd min-android-app-template</pre>
-    </div>
-
-    <div class="card">
-      <h3>Run locally</h3>
-      <ol>
-        <li>Get dependencies: <code>flutter pub get</code></li>
-        <li>Run on a connected Android device or emulator: <code>flutter run</code></li>
-        <li>Or specify a device:</li>
-      </ol>
-      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">flutter devices         # Find your Android device ID
-flutter run -d DEVICE_ID # Replace with the Android device ID</pre>
-    </div>
-
-    <div class="card">
-      <h3>Build Android artifacts</h3>
-      <p>Debug builds need no private release credentials. Before building release artifacts, configure your private keystore using <code>SIGNING.md</code> in the repository. Release builds fail if signing configuration is missing or incomplete.</p>
-      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">flutter build apk --debug    # Developer APK
-# After configuring private release signing:
-flutter build apk --release  # Signed Android APK
-flutter build appbundle      # Signed Play Store bundle</pre>
-    </div>
-
-    <div class="card">
-      <h3>Run tests</h3>
-      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">flutter test              # Run all tests
-flutter test --coverage   # With coverage</pre>
-    </div>
-
-    <div class="card">
-      <h3>Website (optional)</h3>
-      <p>If you need to work on the repository website, switch to the <code>astro/</code> directory and run:</p>
-      <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;overflow:auto">cd astro
-npm ci
-npm run dev</pre>
-    </div>
-
-    <div class="card">
-      <h3>Need more help?</h3>
-      <p>Open an issue or pull request on the <a href="https://github.com/cmwen/min-android-app-template" target="_blank" rel="noopener" style="color:var(--accent)">GitHub repository</a>. For CI or release problems check <code>.github/workflows/</code>.</p>
-    </div>
-  </section>
+<BaseLayout title="Install and connect">
+  <h1>Put the dashboard beside your Mac</h1>
+  <section class="card"><h2>1. Install on Android</h2><p>Use an Android 9 or later tablet. Download the APK from the <a href={`${base}/releases/`}>beta release</a>, allow installation from that download source, then open Codex Micro Tablet. The app starts in landscape, in either cable direction.</p><p>The APK is debug-signed. Updating an existing install requires the same signing certificate. A different certificate requires uninstalling the old app, which removes its saved settings.</p></section>
+  <section class="card"><h2>2. Connect with Bluetooth LE</h2><ol><li>Open Connection settings, select BLE and tap <strong>Start BLE HID</strong>.</li><li>On your Mac, pair with <strong>Codex Micro Tablet</strong>, then open Codex’s Micro settings.</li><li>Wait for <strong>Micro linked</strong> before testing a harmless mapped action. Pairing alone does not confirm discovery.</li></ol><p>Keep the dashboard open. If a connected session stalls at discovery, disconnect/reconnect from the Mac and reopen Micro settings. In the observed case, turning Mac Bluetooth off and on restored discovery.</p></section>
+  <section class="card"><h2>3. Add live quota and chats</h2><p>Run the existing <a href="https://github.com/cmwen/FNK0104B/tree/main/monitor-server" target="_blank" rel="noopener">FNK0104B monitor-server</a> on the Mac. Open the tablet’s bridge settings and enter the Mac’s LAN address and the same monitor key used by your ESP32. The Mac’s loopback address is not reachable from the tablet.</p><p>Tap a named chat and then <strong>Message</strong> to write to it, or leave the selection empty to start a new thread. Review approvals on the Mac.</p></section>
+  <section class="card"><h2>Optional: rooted USB HID</h2><p>On the tested stock Lenovo TB-8505F, select USB HID, tap <strong>Start USB HID</strong> and allow the app in Magisk. Connect a data cable to the Mac. After moving the cable, use Start again if disconnected.</p><p><strong>Release controls / restore USB</strong> is available in the header and Connection settings. USB is experimental and device-specific. No kernel flashing is required by this app.</p></section>
+  <section class="card"><h2>Build from source</h2><pre>git clone https://github.com/cmwen/codex-micro-tablet.git
+cd codex-micro-tablet
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --debug</pre><p>The repository pins Flutter 3.38.7 and uses Java 17. Configure your private signing separately through <a href="https://github.com/cmwen/codex-micro-tablet/blob/main/SIGNING.md" target="_blank" rel="noopener">SIGNING.md</a> for production builds.</p></section>
 </BaseLayout>
