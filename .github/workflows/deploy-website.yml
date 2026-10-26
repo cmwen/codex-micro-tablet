@@ -29,7 +29,7 @@ jobs:
       # Never check out or execute workflow_run code until a published release is verified.
       - name: Resolve published release commit
         id: resolve
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             if (context.eventName === 'workflow_dispatch') {
@@ -67,13 +67,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout verified commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-ref.outputs.ref }}
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -101,7 +101,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Deploy to GitHub Pages
         id: deployment
