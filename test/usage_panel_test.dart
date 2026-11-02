@@ -8,12 +8,17 @@ void main() {
     'used_percent': used,
     'resets_at': reset.millisecondsSinceEpoch ~/ 1000,
   };
-  Widget panel({Map? usage, DateTime Function()? clock}) => MaterialApp(
+  Widget panel({
+    Map? usage,
+    DateTime Function()? clock,
+    bool readOnly = false,
+  }) => MaterialApp(
     theme: ThemeData.dark(),
     home: Scaffold(
       body: SingleChildScrollView(
         child: UsagePanel(
           usage: usage,
+          readOnly: readOnly,
           status: 'Connected',
           onSettings: () {},
           onRefresh: () {},
@@ -45,6 +50,34 @@ void main() {
     expect(find.textContaining('October 22, 2026'), findsOneWidget);
     expect(find.textContaining('October 26, 2026'), findsOneWidget);
     expect(find.textContaining(now.timeZoneName), findsNWidgets(2));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('standalone emphasizes remaining while keeping used progress', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      panel(
+        readOnly: true,
+        usage: {
+          'five_hour': bucket(29, now.add(const Duration(hours: 2))),
+          'weekly': {'used_percent': null},
+        },
+      ),
+    );
+    final remaining = tester.widget<Text>(find.text('71% remaining'));
+    final used = tester.widget<Text>(find.text('29% used'));
+    expect(remaining.style!.fontSize, greaterThan(used.style!.fontSize!));
+    expect(find.text('Usage unavailable'), findsOneWidget);
+    expect(find.text('Resets in 2h 0m'), findsOneWidget);
+    final progress = tester
+        .widgetList<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator),
+        )
+        .toList();
+    expect(progress.first.value, 0.29);
+    expect(progress.first.semanticsLabel, '5-hour usage: 29 percent used');
+    expect(progress.last.semanticsLabel, 'Weekly usage: unavailable');
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -118,6 +151,16 @@ void main() {
         panel(
           usage: {
             'five_hour': bucket(99, now.add(const Duration(hours: 2))),
+            'weekly': bucket(73, now.add(const Duration(days: 6))),
+          },
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(
+        panel(
+          readOnly: true,
+          usage: {
+            'five_hour': bucket(0, now.add(const Duration(hours: 2))),
             'weekly': bucket(73, now.add(const Duration(days: 6))),
           },
         ),

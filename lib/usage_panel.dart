@@ -336,12 +336,21 @@ class _UsagePanelState extends State<UsagePanel> {
         Text(name, style: const TextStyle(color: Color(0xffa5b4b5))),
         const SizedBox(height: 6),
         Text(
-          used == null ? '—' : '${used.round()}% used',
-          style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w600),
+          used == null
+              ? '—'
+              : widget.readOnly
+              ? '${(100 - used).round()}% remaining'
+              : '${used.round()}% used',
+          style: TextStyle(
+            fontSize: widget.readOnly ? 32 : 25,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         Text(
           used == null
               ? 'Usage unavailable'
+              : widget.readOnly
+              ? '${used.round()}% used'
               : '${(100 - used).round()}% remaining',
           style: const TextStyle(color: Color(0xffa5b4b5), fontSize: 12),
         ),
