@@ -113,3 +113,7 @@ If WSL cannot see the reconnected tablet but Windows owns it, use Windows ADB on
 See [implementation and validation](docs/CODEX_MICRO_TABLET.md) for protocol details and the distinction between automated checks, tablet observations, and Mac acceptance.
 
 Reference source inspected: FNK0104B commit `deeaa281a7d842a78c07d18732ee266a6469667c`, particularly `lib/codex_hid/src/codex_hid/{wire,protocol}.hpp` and `lib/fnk0104b/src/codex_ble.cpp`. No ESP32 binary or hardware-specific GPIO/audio code is used by this app.
+
+### Standalone monitor display
+
+Choose the monitor icon in the dashboard header to switch to a read-only display. This mode remembers your choice across launches and does not initialize the HID connection on startup. Use the settings icon to configure the monitor bridge, and the exit icon to return to the control dashboard. The bridge and a signed-in Codex app-server are still required for live data; chat coverage is limited to what that bridge can see. Offline and unavailable data are labelled rather than presented as live. The display shifts its content periodically to reduce static pixel wear; this cannot guarantee protection against burn-in.

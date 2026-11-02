@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:codex_micro_tablet/main.dart';
 import 'widget_test.dart' show FakeHid, FakeBridge;
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   for (final size in [
     const Size(853, 533),
     const Size(1280, 800),

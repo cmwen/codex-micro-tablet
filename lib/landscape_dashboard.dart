@@ -19,6 +19,7 @@ class LandscapeDashboard extends StatelessWidget {
     required this.onConnections,
     required this.onBridgeSettings,
     required this.onCompose,
+    this.onStandalone,
   });
 
   final HidService hid;
@@ -26,6 +27,7 @@ class LandscapeDashboard extends StatelessWidget {
   final String? target;
   final ValueChanged<String?> onTarget;
   final VoidCallback onConnections, onBridgeSettings, onCompose;
+  final VoidCallback? onStandalone;
 
   List<Map> get agents =>
       (bridge.snapshot?['agents'] as List? ?? []).whereType<Map>().toList();
@@ -125,6 +127,11 @@ class LandscapeDashboard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: hid.ready ? mint : muted, fontSize: 12),
           ),
+        ),
+        IconButton(
+          tooltip: 'Standalone display',
+          onPressed: onStandalone,
+          icon: const Icon(Icons.monitor),
         ),
         IconButton(
           tooltip: 'Release controls / restore USB',

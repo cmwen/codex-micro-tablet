@@ -192,6 +192,16 @@ class MainActivity : FlutterActivity() {
                     "status" -> result.success(snapshot())
                     "setTransport" -> { changeTransport(call.argument<String>("transport") ?: "ble"); result.success(snapshot()) }
                     "start" -> { requested = true; error = null; startHid(true); result.success(snapshot()) }
+                    "stop" -> {
+                        requested = false; usbMicRequested = false
+                        releaseAll("standalone display")
+                        microphone.stop()
+                        if (transportMode == "ble") ble.stop()
+                        else if (transportMode == "usb") usb.stop()
+                        else if (permitted()) { host?.let { hid?.disconnect(it) }; hid?.unregisterApp() }
+                        registered = false; registering = false; resetLink()
+                        emit(); result.success(snapshot())
+                    }
                     "restoreUsb" -> { recoverUsb(); result.success(snapshot()) }
                     "stopMicrophone" -> { usbMicRequested = false; microphone.stop(); result.success(snapshot()) }
                     "startMicrophone" -> {
@@ -541,16 +551,16 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 430) {
+        if (requestCode == 430 && requested) {
             if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                requested = true; startHid(false)
+                startHid(false)
             } else { requested = false; fail("Microphone permission declined. USB mode was not enabled.") }
         }
-        if (requestCode == 431) {
+        if (requestCode == 431 && usbMicRequested) {
             if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED && usb.active) microphone.start()
             else fail("Microphone access was not granted or USB mode stopped")
         }
-        if (requestCode == 420) {
+        if (requestCode == 420 && requested) {
             if (permitted()) startHid(true) else fail("Bluetooth permission was declined; enable it in Android app settings")
         }
     }
@@ -558,7 +568,7 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Android activity compatibility callback")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 421) startHid(false)
+        if (requestCode == 421 && requested) startHid(false)
     }
 
     override fun onPause() {

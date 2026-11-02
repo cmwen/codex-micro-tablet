@@ -70,6 +70,7 @@ class HidService extends ChangeNotifier {
 
   Future<void> refresh() async => await invoke('status');
   Future<void> start() async => await invoke('start');
+  Future<bool> stop() async => await invoke('stop') is Map;
   Future<void> setTransport(bool ble) async =>
       await chooseTransport(ble ? 'ble' : 'classic');
   Future<void> chooseTransport(String transport) async =>
