@@ -8,18 +8,19 @@ class UsagePanel extends StatefulWidget {
     super.key,
     required this.usage,
     required this.status,
-    required this.onSettings,
-    required this.onRefresh,
+    this.onSettings,
+    this.onRefresh,
+    this.readOnly = false,
     this.error = '',
     this.lastUpdated,
     this.now,
     this.compact = false,
   });
 
-  final bool compact;
+  final bool compact, readOnly;
   final Map? usage;
   final String status, error;
-  final VoidCallback onSettings, onRefresh;
+  final VoidCallback? onSettings, onRefresh;
   final DateTime? lastUpdated;
   final DateTime Function()? now;
 
@@ -47,7 +48,7 @@ class _UsagePanelState extends State<UsagePanel> {
   @override
   Widget build(BuildContext context) {
     final now = (widget.now?.call() ?? DateTime.now()).toLocal();
-    if (widget.compact) return _compact(context, now);
+    if (widget.compact && !widget.readOnly) return _compact(context, now);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -57,28 +58,30 @@ class _UsagePanelState extends State<UsagePanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Codex usage',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+          if (!widget.readOnly)
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Codex usage',
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: widget.onRefresh,
-                tooltip: 'Refresh usage',
-                icon: const Icon(Icons.refresh),
-              ),
-              IconButton(
-                onPressed: widget.onSettings,
-                tooltip: 'Usage bridge settings',
-                icon: const Icon(Icons.tune),
-              ),
-            ],
-          ),
-          Text(widget.status, style: Theme.of(context).textTheme.bodySmall),
-          if (widget.error.isNotEmpty)
+                IconButton(
+                  onPressed: widget.onRefresh,
+                  tooltip: 'Refresh usage',
+                  icon: const Icon(Icons.refresh),
+                ),
+                IconButton(
+                  onPressed: widget.onSettings,
+                  tooltip: 'Usage bridge settings',
+                  icon: const Icon(Icons.tune),
+                ),
+              ],
+            ),
+          if (!widget.readOnly)
+            Text(widget.status, style: Theme.of(context).textTheme.bodySmall),
+          if (!widget.readOnly && widget.error.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
@@ -86,7 +89,7 @@ class _UsagePanelState extends State<UsagePanel> {
                 style: const TextStyle(color: Colors.orangeAccent),
               ),
             ),
-          const SizedBox(height: 14),
+          if (!widget.readOnly) const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, bounds) {
               final cards = [
@@ -119,14 +122,16 @@ class _UsagePanelState extends State<UsagePanel> {
               );
             },
           ),
-          if (widget.usage == null) ...[
+          if (!widget.readOnly && widget.usage == null) ...[
             const SizedBox(height: 12),
             const Text(
               'Connect the same Wi-Fi bridge used by your ESP32 monitor.',
               style: TextStyle(color: Color(0xffa5b4b5), fontSize: 12),
             ),
           ],
-          if (widget.usage != null && widget.lastUpdated != null) ...[
+          if (!widget.readOnly &&
+              widget.usage != null &&
+              widget.lastUpdated != null) ...[
             const SizedBox(height: 12),
             Text(
               'Updated ${_time(context, widget.lastUpdated!.toLocal())} · Reset times are local',

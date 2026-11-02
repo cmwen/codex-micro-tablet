@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'bridge_client.dart';
+import 'usage_panel.dart';
 
 /// Read-only monitor. A small bounded shift reduces static pixel wear.
 class StandaloneDisplay extends StatefulWidget {
@@ -119,14 +120,7 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
                     'Last update: ${bridge.lastUpdated!.toLocal().toString().split('.').first}',
                   ),
                 const SizedBox(height: 16),
-                Wrap(
-                  spacing: 32,
-                  runSpacing: 16,
-                  children: [
-                    _usage('5-hour usage', usage?['five_hour'] as Map?),
-                    _usage('Weekly usage', usage?['weekly'] as Map?),
-                  ],
-                ),
+                UsagePanel(usage: usage, status: bridge.status, readOnly: true),
                 const SizedBox(height: 24),
                 Text(
                   'BRIDGE CHATS · ${agents.length} visible',
@@ -173,29 +167,6 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _usage(String label, Map? bucket) {
-    final used = bucket?['used_percent'];
-    final reset = bucket?['resets_at'];
-    final resetText = reset is num
-        ? DateTime.fromMillisecondsSinceEpoch(
-            (reset * 1000).toInt(),
-          ).toLocal().toString().split('.').first
-        : null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label),
-        Text(
-          used is num ? '${used.toStringAsFixed(0)}% used' : 'Unavailable',
-          style: const TextStyle(fontSize: 28),
-        ),
-        Text(
-          resetText == null ? 'Reset time unavailable' : 'Resets $resetText',
-        ),
-      ],
     );
   }
 }

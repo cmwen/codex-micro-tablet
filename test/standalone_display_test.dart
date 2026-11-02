@@ -30,6 +30,39 @@ class MonitorBridge extends BridgeClient {
 }
 
 void main() {
+  testWidgets('standalone usage distinguishes unavailable from zero', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'standalone_display': true});
+    final hid = MonitorHid();
+    final bridge = MonitorBridge()
+      ..snapshot = {
+        'codex': {
+          'usage': {
+            'five_hour': {'used_percent': 0},
+            'weekly': {'used_percent': null},
+          },
+        },
+        'agents': [],
+      };
+    await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
+    await tester.pumpAndSettle();
+    expect(find.text('0% used'), findsOneWidget);
+    expect(find.text('100% remaining'), findsOneWidget);
+    expect(find.text('Usage unavailable'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .map((bar) => bar.semanticsLabel),
+      ['5-hour usage: 0 percent used', 'Weekly usage: unavailable'],
+    );
+    await tester.pumpWidget(const SizedBox());
+    hid.dispose();
+    bridge.dispose();
+  });
+
   for (final size in [const Size(853, 533), const Size(320, 640)]) {
     testWidgets('Standalone monitor fits $size and shifts', (tester) async {
       SharedPreferences.setMockInitialValues({'standalone_display': true});
@@ -57,6 +90,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(hid.initialized, 0);
       expect(find.text('25% used'), findsOneWidget);
+      expect(find.text('75% remaining'), findsOneWidget);
+      expect(find.text('50% remaining'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
+      final bars = tester
+          .widgetList<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .toList();
+      expect(bars.map((bar) => bar.value), [0.25, 0.5]);
+      expect(find.text('Reset time unavailable'), findsNWidgets(2));
+      expect(find.byTooltip('Refresh usage'), findsNothing);
+      expect(find.byTooltip('Usage bridge settings'), findsNothing);
       expect(find.text('Build app'), findsOneWidget);
       expect(find.byTooltip('Connection settings'), findsNothing);
       expect(
