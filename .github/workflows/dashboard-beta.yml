@@ -12,9 +12,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Read Flutter SDK version
+        id: flutter-sdk
+        shell: bash
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.7'
+          flutter-version: ${{ steps.flutter-sdk.outputs.version }}
           channel: stable
           cache: true
       - run: flutter pub get

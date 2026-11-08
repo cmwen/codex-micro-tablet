@@ -19,5 +19,5 @@ if command -v flutter >/dev/null; then
     flutter analyze
     flutter test
 else
-    echo 'Install Flutter 3.38.7 and run dart format lib test, flutter pub get, flutter analyze, and flutter test.'
+    echo "Install Flutter $(cat .flutter-version) and run dart format lib test, flutter pub get, flutter analyze, and flutter test."
 fi
