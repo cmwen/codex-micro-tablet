@@ -99,8 +99,22 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
       _standalone = false;
     }
     if (!mounted) return;
+    _applyDisplayOrientation();
     if (!_standalone) _initializeHid();
     setState(() => _modeLoaded = true);
+  }
+
+  void _applyDisplayOrientation() {
+    unawaited(
+      SystemChrome.setPreferredOrientations(
+        _standalone
+            ? DeviceOrientation.values
+            : [
+                DeviceOrientation.landscapeLeft,
+                DeviceOrientation.landscapeRight,
+              ],
+      ),
+    );
   }
 
   void _initializeHid() {
@@ -124,6 +138,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
     }
     if (!mounted) return;
     setState(() => _standalone = value);
+    _applyDisplayOrientation();
     if (!value) _initializeHid();
     try {
       final prefs = await SharedPreferences.getInstance();

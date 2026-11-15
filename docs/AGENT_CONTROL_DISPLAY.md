@@ -24,3 +24,10 @@ an idle UI, with BLE transport work deferred. A generated local horizon raster i
 bundled with the app, not downloaded at runtime. No new dashboard network/auth path is
 introduced. Formatting/analyzer/widget tests and debug build evidence are recorded in
 the workspace candidate report; physical tablet acceptance remains separate.
+
+
+Standalone display permits the platform's portrait and landscape orientations after
+loading its saved mode, including on cold start. Returning to the controller restores
+its landscape policy. This distinction is checked at the app navigation/platform
+boundary, rather than inferred from portrait-only widget layout tests. Device evidence
+and APK identity are recorded separately from this behavior description.
