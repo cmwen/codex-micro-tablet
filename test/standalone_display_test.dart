@@ -157,4 +157,97 @@ void main() {
       bridge.dispose();
     });
   }
+
+  testWidgets('ambient mode keeps a compact date and time', (tester) async {
+    SharedPreferences.setMockInitialValues({'standalone_display': true});
+    tester.view.physicalSize = const Size(600, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final hid = MonitorHid();
+    final bridge = MonitorBridge()
+      ..baseUrl = 'http://192.168.1.17:8765'
+      ..status = 'Connected'
+      ..connected = true
+      ..lastUpdated = DateTime.now()
+      ..snapshot = {
+        'codex': {
+          'usage': {
+            'five_hour': {'used_percent': 20},
+            'weekly': {'used_percent': 40},
+          },
+        },
+        'agents': <dynamic>[],
+      };
+    await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
+    await tester.pumpAndSettle();
+    expect(find.text('AMBIENT DISPLAY'), findsOneWidget);
+    final now = DateTime.now().toLocal();
+    final clock =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final localizations = MaterialLocalizations.of(
+      tester.element(find.text('AMBIENT DISPLAY')),
+    );
+    // The ambient entry no longer leads with a full date and a hero clock.
+    expect(find.text(localizations.formatFullDate(now)), findsNothing);
+    expect(find.text(clock), findsOneWidget);
+    expect(find.text(localizations.formatMediumDate(now)), findsOneWidget);
+    final clockRow = find.ancestor(
+      of: find.text(clock),
+      matching: find.byType(Row),
+    );
+    expect(
+      find.descendant(
+        of: clockRow.first,
+        matching: find.text(localizations.formatMediumDate(now)),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.widget<Text>(find.text(clock)).style?.fontSize, lessThan(48));
+    expect(
+      find.text('Codex account quota · local clock · read-only'),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox());
+    hid.dispose();
+    bridge.dispose();
+  });
+
+  testWidgets('a read-only source labels its own contract', (tester) async {
+    SharedPreferences.setMockInitialValues({'standalone_display': true});
+    final hid = MonitorHid();
+    final bridge = MonitorBridge()
+      ..kind = MonitorSourceKind.agentDeck
+      ..baseUrl = 'https://agent-deck-lan.home.cmwen.dev:8444'
+      ..status = 'Connected'
+      ..connected = true
+      ..lastUpdated = DateTime.now()
+      ..snapshot = {
+        'integration': 'connected',
+        'agents': [
+          {
+            'id': 't3code:a',
+            'name': 'Review PR',
+            'status': 'running',
+            'source': 't3code',
+          },
+        ],
+        'codex': {'usage': null},
+      };
+    await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
+    await tester.pumpAndSettle();
+    expect(find.text('AGENT DECK CHATS · 1 visible'), findsOneWidget);
+    expect(
+      find.text('Read-only Agent Deck snapshot of Codex and T3 Code.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Read-only Agent Deck source · local clock'),
+      findsOneWidget,
+    );
+    expect(find.text('BRIDGE CHATS · 1 visible'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    hid.dispose();
+    bridge.dispose();
+  });
 }

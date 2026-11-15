@@ -31,3 +31,33 @@ loading its saved mode, including on cold start. Returning to the controller res
 its landscape policy. This distinction is checked at the app navigation/platform
 boundary, rather than inferred from portrait-only widget layout tests. Device evidence
 and APK identity are recorded separately from this behavior description.
+
+## Monitor sources and LAN discovery
+
+The monitor reads one of two separate read-only contracts. They are never mixed, and
+each has its own endpoint and validating parser:
+
+- **FNK0104B bridge** — `GET /v1/status` with the shared `X-Monitor-Key`. Enter the
+  address manually: the bridge advertises no DNS-SD record. This source also carries
+  the explicit follow-up prompt path (`POST /v1/commands/text`), which stays on the
+  bridge only.
+- **Agent Deck (LAN)** — `GET /api/snapshot` over the HTTPS origin the service publishes
+  in its DNS-SD TXT record. It is read-only and carries no key, so prompt delivery and
+  approvals are unavailable while it is active. Codex quota, Codex and T3 Code entries
+  and source health are normalized into the same monitor model; unsupported values stay
+  explicit rather than being filled in.
+
+`Monitor source` offers a bounded DNS-SD browse (`_http._tcp`, one shot, foreground
+only, never in the background). Results are untrusted endpoint candidates: the instance
+name, host and port identify nothing, a service without a public HTTPS origin is shown
+as unsupported, and nothing is saved until the user picks a candidate and that origin
+answers the Agent Deck contract over verified TLS. No credential is ever sent to a
+discovered name, and the bridge key is never stored for a read-only source. Manual
+entry remains the fallback when nothing is advertised, which is also the only way to
+reach the bridge contract.
+
+A browser tab cannot browse DNS-SD; this discovery is native and applies to the
+installed app only. Choosing either source changes display data only; HID transport,
+mappings, approvals and host microphone gestures keep their existing behavior. The
+ambient clock is compact (local hour/minute beside a short date) so quota and source
+detail keep the available height.

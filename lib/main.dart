@@ -9,6 +9,7 @@ import 'standalone_display.dart';
 
 import 'bridge_client.dart';
 import 'hid_service.dart';
+import 'monitor_source_dialog.dart';
 import 'usage_panel.dart';
 import 'landscape_dashboard.dart';
 
@@ -161,7 +162,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
       if (mounted) {
         setState(
           () => result =
-              'Saved bridge settings could not be loaded. Open Bridge settings to reconnect.',
+              'Saved monitor settings could not be loaded. Open Monitor source to reconnect.',
         );
       }
     }
@@ -207,84 +208,10 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
   }
 
   Future<void> _bridgeSettings() async {
-    final url = TextEditingController(text: bridge.baseUrl);
-    final key = TextEditingController(text: bridge.token);
-    String? validation;
     await showDialog<void>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, update) => AlertDialog(
-          title: const Text('Connect your monitor bridge'),
-          content: SizedBox(
-            width: 460,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Use the same FNK0104B bridge on your Mac for usage and named chats. Bluetooth controls work independently.',
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: url,
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Bridge address',
-                      hintText: 'http://192.168.1.20:8765',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: key,
-                    obscureText: true,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: const InputDecoration(labelText: 'Monitor key'),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Your tablet must reach the bridge over Wi-Fi. Use HTTPS or a trusted private network.',
-                    style: TextStyle(color: muted),
-                  ),
-                  if (validation != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        validation!,
-                        style: const TextStyle(color: Colors.orangeAccent),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                try {
-                  await bridge.configure(url.text.trim(), key.text);
-                  if (context.mounted) Navigator.pop(context);
-                } catch (e) {
-                  update(() => validation = e.toString());
-                }
-              },
-              child: const Text('Save & connect'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => MonitorSourceDialog(bridge: bridge),
     );
-    // Dialog route removal can animate after completion; controllers are kept
-    // until widgets using them have been removed from the tree.
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    url.dispose();
-    key.dispose();
   }
 
   @override
@@ -692,7 +619,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
               IconButton(
                 onPressed: _bridgeSettings,
                 icon: const Icon(Icons.tune),
-                tooltip: 'Bridge settings',
+                tooltip: 'Monitor source',
               ),
               IconButton(
                 onPressed: bridge.busy ? null : bridge.refresh,
@@ -720,12 +647,17 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
               ),
             ),
           const SizedBox(height: 24),
-          _section('BRIDGE CHATS', '${agents.length} visible'),
+          _section(
+            '${bridge.sourceLabel.toUpperCase()} CHATS',
+            '${agents.length} visible',
+          ),
           const SizedBox(height: 12),
           if (agents.isEmpty)
-            const Text(
-              'Connect your monitor bridge to see named chats and usage. Micro slots above follow Desktop assignments independently.',
-              style: TextStyle(color: muted, height: 1.5),
+            Text(
+              bridge.readOnly
+                  ? 'Agent Deck reports no visible chats. Micro slots above follow Desktop assignments independently.'
+                  : 'Connect your monitor bridge to see named chats and usage. Micro slots above follow Desktop assignments independently.',
+              style: const TextStyle(color: muted, height: 1.5),
             )
           else
             for (final agent in agents)
@@ -774,6 +706,14 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
             'Send a message',
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
+          if (bridge.readOnly)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'This monitor source is read-only. Connect the Codex bridge to send prompts.',
+                style: TextStyle(color: muted, fontSize: 12),
+              ),
+            ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             key: ValueKey('destination-$target'),
@@ -822,7 +762,8 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: !bridge.connected || sending || missingTarget
+            onPressed:
+                bridge.readOnly || !bridge.connected || sending || missingTarget
                 ? null
                 : () async {
                     await _send(target);

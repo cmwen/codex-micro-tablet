@@ -153,6 +153,7 @@ class MainActivity : FlutterActivity() {
     private var txGeneration = 0L
     private var lastRx = 0L
     private var listening = false
+    private val discovery by lazy { LocalServiceDiscovery(this) }
 
     private fun permitted(): Boolean = Build.VERSION.SDK_INT < 31 ||
         (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
@@ -186,6 +187,23 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         transportMode = getSharedPreferences("hid", MODE_PRIVATE).getString("transport", "ble")?.takeIf { it in listOf("classic", "usb") } ?: "ble"
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "codex_micro/discovery").setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "discover" -> discovery.discover(
+                        call.argument<String>("serviceType") ?: LocalServiceDiscovery.DEFAULT_SERVICE_TYPE,
+                        (call.argument<Number>("timeoutMs") ?: 5000).toLong(),
+                        { services -> handler.post { result.success(services) } },
+                        { message -> handler.post { result.error("discovery_error", message, null) } },
+                    )
+                    "stop" -> { discovery.stop(); result.success(true) }
+                    else -> result.notImplemented()
+                }
+            } catch (exception: Exception) {
+                discovery.stop()
+                result.error("discovery_error", exception.message ?: "Local discovery failed", null)
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "codex_micro/hid").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
@@ -264,7 +282,11 @@ class MainActivity : FlutterActivity() {
                     "settings" -> { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)); result.success(true) }
                     "loadBridgeSettings" -> result.success(loadBridgeSettings())
                     "saveBridgeSettings" -> {
-                        saveBridgeSettings(call.argument<String>("url") ?: "", call.argument<String>("token") ?: "")
+                        saveBridgeSettings(
+                            call.argument<String>("url") ?: "",
+                            call.argument<String>("token") ?: "",
+                            call.argument<String>("kind") ?: BridgeSettings.KIND_BRIDGE,
+                        )
                         result.success(true)
                     }
                     else -> result.notImplemented()
@@ -573,6 +595,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onPause() {
         foreground = false
+        discovery.stop()
         releaseAll("activity paused")
         microphone.stop()
 
@@ -602,6 +625,7 @@ class MainActivity : FlutterActivity() {
         microphone.stop(); usb.stop()
         if (permitted()) { ble.stop(); hid?.unregisterApp(); hid?.let { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) } }
         if (listening) unregisterReceiver(receiver)
+        discovery.stop()
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -615,24 +639,29 @@ class MainActivity : FlutterActivity() {
         }.generateKey()
     }
 
-    private fun saveBridgeSettings(url: String, token: String) {
+    private fun saveBridgeSettings(url: String, token: String, kind: String) {
         require(url.length <= 2048 && token.length <= 4096) { "Bridge settings are too long" }
+        val source = BridgeSettings.kind(kind)
         val prefs = getSharedPreferences("bridge", MODE_PRIVATE)
         if (url.isEmpty()) { prefs.edit().clear().apply(); return }
+        // A read-only Agent Deck origin never stores a shared monitor key.
+        if (source == BridgeSettings.KIND_AGENT_DECK && token.isNotEmpty()) error("A read-only source cannot store a key")
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, bridgeKey()) }
         val ciphertext = cipher.doFinal(token.toByteArray(Charsets.UTF_8))
-        check(prefs.edit().putString("url", url).putString("token", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+        check(prefs.edit().putString("url", url).putString("kind", source)
+            .putString("token", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
             .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP)).commit()) { "Unable to save bridge settings" }
     }
 
     private fun loadBridgeSettings(): Map<String, String> {
         val prefs = getSharedPreferences("bridge", MODE_PRIVATE)
         val url = prefs.getString("url", "") ?: ""
-        if (url.isEmpty()) return mapOf("url" to "", "token" to "")
+        val kind = BridgeSettings.kind(prefs.getString("kind", null))
+        if (url.isEmpty()) return mapOf("url" to "", "token" to "", "kind" to kind)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
             init(Cipher.DECRYPT_MODE, bridgeKey(), GCMParameterSpec(128, Base64.decode(prefs.getString("iv", ""), Base64.NO_WRAP)))
         }
         val token = String(cipher.doFinal(Base64.decode(prefs.getString("token", ""), Base64.NO_WRAP)), Charsets.UTF_8)
-        return mapOf("url" to url, "token" to token)
+        return mapOf("url" to url, "token" to token, "kind" to kind)
     }
 }

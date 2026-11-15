@@ -246,4 +246,152 @@ void main() {
     expect(client.connected, isFalse);
     expect(client.snapshot, isNull);
   });
+
+  test('read-only Agent Deck source is verified before it is saved', () async {
+    final paths = <String>[];
+    HttpOverrides.global = _Http((request) {
+      paths.add(request.uri.path);
+      // A discovered read-only origin never receives the bridge monitor key.
+      expect(request.headers.values.containsKey('x-monitor-key'), isFalse);
+      expect(request.uri.scheme, 'https');
+      expect(request.uri.host, 'agent-deck-lan.home.test');
+      expect(request.uri.port, 8444);
+      expect(request.followRedirects, isFalse);
+      return _Response(
+        200,
+        jsonEncode({
+          'integration': 'connected',
+          'harnesses': [
+            {
+              'id': 'codex',
+              'integration': 'connected',
+              'agents': [
+                {'id': 'codex:a', 'name': 'Fix build', 'status': 'running'},
+              ],
+              'usage': {
+                'quota': {
+                  'five_hour': {'used_percent': 30, 'resets_at': 1794721384},
+                },
+              },
+            },
+            {'id': 't3code', 'integration': 'degraded', 'agents': <dynamic>[]},
+          ],
+        }),
+      );
+    });
+    final client = BridgeClient(pollInterval: const Duration(days: 1));
+    addTearDown(client.dispose);
+    await client.configureReadOnly('https://agent-deck-lan.home.test:8444');
+    // Probe first, then the adopted source reads the same read-only endpoint.
+    expect(paths, ['/api/snapshot', '/api/snapshot']);
+    expect(saved?['kind'], 'agent-deck');
+    expect(saved?['token'], '');
+    expect(saved?['url'], 'https://agent-deck-lan.home.test:8444');
+    expect(client.readOnly, isTrue);
+    expect(client.sourceLabel, 'Agent Deck');
+    expect(client.connected, isTrue);
+    expect((client.snapshot?['agents'] as List).length, 1);
+    expect(client.snapshot?['codex']['usage']['five_hour']['used_percent'], 30);
+    await expectLater(
+      client.sendText('Build it'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('read-only'),
+        ),
+      ),
+    );
+    expect(paths, ['/api/snapshot', '/api/snapshot']);
+  });
+
+  test(
+    'read-only sources refuse plaintext and incompatible endpoints',
+    () async {
+      var paths = <String>[];
+      var status = 200;
+      HttpOverrides.global = _Http((request) {
+        paths.add(request.uri.path);
+        if (status != 200) return _Response(status, '');
+        // A legacy bridge response is not the Agent Deck contract.
+        return _Response(
+          200,
+          '{"integration":"connected","agents":[],"codex":{}}',
+        );
+      });
+      final client = BridgeClient(pollInterval: const Duration(days: 1));
+      addTearDown(client.dispose);
+      await expectLater(
+        client.configureReadOnly('http://192.168.1.17:8082'),
+        throwsFormatException,
+      );
+      expect(paths, isEmpty);
+      expect(saved, isNull);
+
+      await expectLater(
+        client.configureReadOnly('https://agent-deck-lan.home.test:8444'),
+        throwsFormatException,
+      );
+      expect(saved, isNull);
+      expect(client.baseUrl, isEmpty);
+
+      paths = <String>[];
+      status = 404;
+      await expectLater(
+        client.configureReadOnly('https://agent-deck-lan.home.test:8444'),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('does not serve the monitor API'),
+          ),
+        ),
+      );
+      expect(saved, isNull);
+    },
+  );
+
+  test('a saved read-only source never reloads a monitor key', () async {
+    saved = {
+      'url': 'https://agent-deck-lan.home.test:8444',
+      'token': 'stale-key',
+      'kind': 'agent-deck',
+    };
+    HttpOverrides.global = _Http((request) {
+      expect(request.headers.values.containsKey('x-monitor-key'), isFalse);
+      return _Response(
+        200,
+        jsonEncode({
+          'harnesses': [
+            {'id': 'codex', 'integration': 'connected', 'agents': <dynamic>[]},
+            {'id': 't3code', 'integration': 'connected', 'agents': <dynamic>[]},
+          ],
+        }),
+      );
+    });
+    final client = BridgeClient(pollInterval: const Duration(days: 1));
+    addTearDown(client.dispose);
+    await client.load();
+    expect(client.kind, MonitorSourceKind.agentDeck);
+    expect(client.token, isEmpty);
+    expect(client.connected, isTrue);
+  });
+
+  test('legacy saved settings still load as the bridge contract', () async {
+    saved = {'url': 'http://127.0.0.1:8765', 'token': 'legacy-key'};
+    HttpOverrides.global = _Http((request) {
+      expect(request.headers.values['x-monitor-key'], 'legacy-key');
+      expect(request.uri.path, '/v1/status');
+      return _Response(
+        200,
+        '{"integration":"connected","agents":[],"codex":{}}',
+      );
+    });
+    final client = BridgeClient(pollInterval: const Duration(days: 1));
+    addTearDown(client.dispose);
+    await client.load();
+    expect(client.kind, MonitorSourceKind.bridge);
+    expect(client.readOnly, isFalse);
+    expect(client.connected, isTrue);
+  });
 }

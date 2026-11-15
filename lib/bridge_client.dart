@@ -5,6 +5,25 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'agent_deck_snapshot.dart';
+
+/// Which read-only monitor contract a client speaks.
+///
+/// The legacy FNK0104B bridge (`GET /v1/status`, `X-Monitor-Key`) and the Agent Deck LAN
+/// contract (`GET /api/snapshot`, HTTPS only, no key) are separate APIs. Each kind uses
+/// its own endpoint and its own validating parser, and only the bridge kind carries a
+/// credential.
+enum MonitorSourceKind {
+  bridge('bridge', 'Bridge'),
+  agentDeck('agent-deck', 'Agent Deck');
+
+  const MonitorSourceKind(this.wire, this.label);
+  final String wire, label;
+
+  static MonitorSourceKind parse(Object? value) =>
+      values.firstWhere((kind) => kind.wire == value, orElse: () => bridge);
+}
+
 /// Client for the existing FNK0104B monitor-server HTTP contract.
 /// Reads retry periodically; explicit submissions are never retried.
 class BridgeClient extends ChangeNotifier {
@@ -15,10 +34,15 @@ class BridgeClient extends ChangeNotifier {
   bool connected = false, busy = false;
   Map<String, dynamic>? snapshot;
   DateTime? lastUpdated;
+  MonitorSourceKind kind = MonitorSourceKind.bridge;
   Timer? _timer;
   int _generation = 0;
   bool _disposed = false;
   int? _reading;
+
+  /// True when the active source cannot send prompts or controls.
+  bool get readOnly => kind == MonitorSourceKind.agentDeck;
+  String get sourceLabel => kind.label;
 
   static Uri validateUrl(String value) {
     final uri = Uri.tryParse(value.trim());
@@ -40,6 +64,18 @@ class BridgeClient extends ChangeNotifier {
       );
     }
     return uri.replace(path: '');
+  }
+
+  /// A read-only Agent Deck origin must be verified TLS; there is no plaintext or
+  /// redirect entry point for this source.
+  static Uri validateReadOnlyUrl(String value) {
+    final uri = validateUrl(value);
+    if (uri.scheme != 'https') {
+      throw const FormatException(
+        'A read-only monitor source requires an HTTPS origin.',
+      );
+    }
+    return uri;
   }
 
   static bool _localHost(String host) {
@@ -65,7 +101,12 @@ class BridgeClient extends ChangeNotifier {
     if (_disposed || saved == null || (saved['url'] as String? ?? '').isEmpty) {
       return;
     }
-    _activate(saved['url'] as String, saved['token'] as String? ?? '');
+    final kind = MonitorSourceKind.parse(saved['kind']);
+    _activate(
+      saved['url'] as String,
+      kind == MonitorSourceKind.bridge ? saved['token'] as String? ?? '' : '',
+      kind,
+    );
     await refresh();
   }
 
@@ -77,16 +118,63 @@ class BridgeClient extends ChangeNotifier {
     await _storage.invokeMethod<void>('saveBridgeSettings', {
       'url': origin,
       'token': key,
+      'kind': MonitorSourceKind.bridge.wire,
     });
     if (_disposed) return;
-    _activate(origin, key);
+    _activate(origin, key, MonitorSourceKind.bridge);
     if (origin.isNotEmpty) await refresh();
   }
 
-  void _activate(String url, String key) {
+  /// Verifies a discovered read-only origin, then saves it. Nothing is persisted
+  /// unless the endpoint answers with the Agent Deck contract over verified TLS.
+  Future<void> configureReadOnly(String origin) async {
+    final uri = validateReadOnlyUrl(origin);
+    await _probe(uri);
+    await _storage.invokeMethod<void>('saveBridgeSettings', {
+      'url': uri.toString(),
+      'token': '',
+      'kind': MonitorSourceKind.agentDeck.wire,
+    });
+    if (_disposed) return;
+    _activate(uri.toString(), '', MonitorSourceKind.agentDeck);
+    await refresh();
+  }
+
+  /// Fetches and validates a candidate without saving or adopting it.
+  Future<void> _probe(Uri origin) async {
+    try {
+      final data = await _request(
+        origin,
+        '',
+        'GET',
+        _pathFor(MonitorSourceKind.agentDeck),
+      );
+      normalizeAgentDeckSnapshot(data);
+    } on FormatException {
+      throw const FormatException(
+        'That service does not expose the Agent Deck read-only API.',
+      );
+    } on BridgeException catch (error) {
+      throw FormatException(error.message);
+    } catch (_) {
+      throw const FormatException(
+        'Cannot reach that service over HTTPS. Check the home network and its certificate.',
+      );
+    }
+  }
+
+  String _pathFor(MonitorSourceKind value) =>
+      value == MonitorSourceKind.agentDeck ? '/api/snapshot' : '/v1/status';
+
+  void _activate(String url, String key, MonitorSourceKind source) {
     // Validate persisted settings too; no unrestricted plaintext destinations.
-    baseUrl = url.isEmpty ? '' : validateUrl(url).toString();
-    token = key;
+    kind = source;
+    baseUrl = url.isEmpty
+        ? ''
+        : (source == MonitorSourceKind.agentDeck
+              ? validateReadOnlyUrl(url).toString()
+              : validateUrl(url).toString());
+    token = source == MonitorSourceKind.bridge ? key : '';
     ++_generation;
     _timer?.cancel();
     snapshot = null;
@@ -107,24 +195,40 @@ class BridgeClient extends ChangeNotifier {
   Future<void> refresh() async {
     if (_disposed || baseUrl.isEmpty || _reading == _generation) return;
     final generation = _generation;
+    final source = kind;
     _reading = generation;
     try {
-      final data = await _request('GET', '/v1/status');
+      final origin = validateUrl(baseUrl);
+      final data = await _request(
+        origin,
+        source == MonitorSourceKind.bridge ? token : '',
+        'GET',
+        _pathFor(source),
+      );
       if (_disposed || generation != _generation) return;
-      if (data['codex'] is! Map ||
-          data['agents'] is! List ||
-          data['integration'] is! String) {
-        throw const FormatException(
-          'Bridge response does not match the monitor status API.',
-        );
+      if (source == MonitorSourceKind.bridge) {
+        if (data['codex'] is! Map ||
+            data['agents'] is! List ||
+            data['integration'] is! String) {
+          throw const FormatException(
+            'Bridge response does not match the monitor status API.',
+          );
+        }
+        snapshot = _validateSnapshot(data);
+      } else {
+        snapshot = normalizeAgentDeckSnapshot(data);
       }
-      snapshot = _validateSnapshot(data);
       lastUpdated = DateTime.now();
-      connected = data['integration'] == 'connected';
-      status = connected ? 'Connected' : 'Bridge ${data['integration']}';
+      final integration = snapshot!['integration'];
+      connected = integration == 'connected';
+      status = connected
+          ? 'Connected'
+          : '${source.label} ${integration ?? 'unknown'}';
       error = connected
           ? ''
-          : 'The bridge cannot fully observe Codex. Check the bridge on your Mac.';
+          : source == MonitorSourceKind.bridge
+          ? 'The bridge cannot fully observe Codex. Check the bridge on your Mac.'
+          : 'Agent Deck reports limited observation. Check its desktop service.';
     } catch (e) {
       if (_disposed || generation != _generation) return;
       connected = false;
@@ -175,6 +279,13 @@ class BridgeClient extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> sendText(String text, {String? agentId}) async {
+    // Prompt delivery exists only on the bridge contract; a read-only source must
+    // never be treated as an interchangeable transport.
+    if (readOnly) {
+      throw StateError(
+        'This source is read-only. Connect the Codex bridge to send messages.',
+      );
+    }
     if (_disposed || baseUrl.isEmpty || !connected) {
       throw StateError('Connect the bridge before sending a message.');
     }
@@ -186,11 +297,17 @@ class BridgeClient extends ChangeNotifier {
     busy = true;
     _emit();
     try {
-      final result = await _request('POST', '/v1/commands/text', {
-        'text': text.trim(),
-        if (agentId != null) 'agent_id': agentId,
-        'request_id': 'tablet-${DateTime.now().microsecondsSinceEpoch}',
-      });
+      final result = await _request(
+        validateUrl(baseUrl),
+        token,
+        'POST',
+        '/v1/commands/text',
+        {
+          'text': text.trim(),
+          if (agentId != null) 'agent_id': agentId,
+          'request_id': 'tablet-${DateTime.now().microsecondsSinceEpoch}',
+        },
+      );
       if (result['ok'] == false || result['error'] != null) {
         throw const BridgeException(
           'The bridge rejected the message. Check Codex before trying again.',
@@ -210,13 +327,13 @@ class BridgeClient extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> _request(
+    Uri origin,
+    String key,
     String method,
     String path, [
     Map<String, dynamic>? data,
   ]) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-    final origin = validateUrl(baseUrl);
-    final key = token;
     try {
       return await (() async {
         final request = await client.openUrl(
@@ -225,7 +342,7 @@ class BridgeClient extends ChangeNotifier {
         );
         request.followRedirects =
             false; // Never forward a private key to a redirect.
-        request.headers.set('X-Monitor-Key', key);
+        if (key.isNotEmpty) request.headers.set('X-Monitor-Key', key);
         if (data != null) {
           request.headers.contentType = ContentType.json;
           request.add(utf8.encode(jsonEncode(data)));
@@ -234,9 +351,10 @@ class BridgeClient extends ChangeNotifier {
         if (response.statusCode != 200) {
           throw BridgeException(switch (response.statusCode) {
             401 => 'Bridge authentication failed. Check the shared token.',
+            404 => 'That address does not serve the monitor API.',
             409 => 'Codex needs attention in the desktop app.',
             503 => 'The bridge cannot reach its Codex app-server.',
-            _ => 'Bridge returned HTTP ${response.statusCode}.',
+            _ => 'Monitor service returned HTTP ${response.statusCode}.',
           });
         }
         final bytes = <int>[];
@@ -257,11 +375,12 @@ class BridgeClient extends ChangeNotifier {
     }
   }
 
-  static String _safeError(Object error) {
+  String _safeError(Object error) {
     if (error is BridgeException) return error.message;
-    if (error is TimeoutException) return 'Bridge request timed out.';
-    if (error is FormatException) {
-      return 'Bridge response or address is invalid.';
+    if (error is TimeoutException) return 'Monitor request timed out.';
+    if (error is FormatException) return error.message;
+    if (readOnly) {
+      return 'Cannot reach Agent Deck. Check the home network and its HTTPS origin.';
     }
     return 'Cannot reach the bridge. Check its address, Wi-Fi and shared token.';
   }

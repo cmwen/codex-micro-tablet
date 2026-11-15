@@ -193,19 +193,21 @@ class LandscapeDashboard extends StatelessWidget {
                       Text(
                         bridge.connected
                             ? 'No visible chats in the latest snapshot.'
-                            : 'Connect your monitor bridge',
+                            : 'Connect a monitor source',
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Named chats and live status appear here.',
+                      Text(
+                        bridge.readOnly
+                            ? 'Read-only Agent Deck snapshot · prompts stay on the bridge.'
+                            : 'Named chats and live status appear here.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: muted, fontSize: 12),
+                        style: const TextStyle(color: muted, fontSize: 12),
                       ),
                       if (!bridge.connected)
                         TextButton(
                           onPressed: onBridgeSettings,
-                          child: const Text('Set up bridge'),
+                          child: const Text('Set up source'),
                         ),
                     ],
                   ),
@@ -300,7 +302,9 @@ class LandscapeDashboard extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          target == null
+          bridge.readOnly
+              ? 'Read-only Agent Deck source · prompts need the Codex bridge'
+              : target == null
               ? 'Tap a chat to target a bridge message'
               : agents.any((a) => a['id'] == target)
               ? 'Chat selected · tap Message to write'

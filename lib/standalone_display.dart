@@ -153,7 +153,9 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
         ? 'AMBIENT DISPLAY'
         : 'Chat activity';
     final clock =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final day = MaterialLocalizations.of(context).formatMediumDate(now);
+    final source = bridge.sourceLabel;
     return ColoredBox(
       color: const Color(0xff030d22),
       child: Padding(
@@ -181,7 +183,7 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Bridge settings',
+                      tooltip: 'Monitor source',
                       onPressed: widget.onSettings,
                       icon: const Icon(Icons.settings_outlined, color: muted),
                     ),
@@ -208,7 +210,7 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
                         ),
                         if (bridge.baseUrl.isEmpty)
                           const Text(
-                            'Set up the monitor bridge',
+                            'Set up a monitor source',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: muted),
                           ),
@@ -226,7 +228,7 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
                           ),
                         const SizedBox(height: 12),
                         Container(
-                          padding: const EdgeInsets.fromLTRB(12, 20, 12, 40),
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(14),
                             image: const DecorationImage(
@@ -241,7 +243,7 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: muted,
-                                  fontSize: 16,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -265,38 +267,56 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
                                   style: const TextStyle(color: cyan),
                                 ),
                               ] else ...[
-                                const SizedBox(height: 14),
-                                Text(
-                                  MaterialLocalizations.of(
-                                    context,
-                                  ).formatFullDate(now),
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: muted,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    clock,
-                                    style: const TextStyle(
-                                      fontSize: 62,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
+                                const SizedBox(height: 6),
+                                // Ambient mode keeps a compact date/time so quota
+                                // and source detail keep the available height.
+                                Semantics(
+                                  label: 'Local time $clock, $day',
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.baseline,
+                                      textBaseline: TextBaseline.alphabetic,
+                                      children: [
+                                        Text(
+                                          clock,
+                                          style: const TextStyle(
+                                            fontSize: 38,
+                                            height: 1.1,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                            fontFeatures: [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          day,
+                                          style: const TextStyle(
+                                            color: muted,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                                if (!observation.quiet)
-                                  const Text(
-                                    'Waiting for fresh bridge activity',
-                                    style: TextStyle(color: Colors.amber),
-                                  ),
                               ],
                             ],
                           ),
                         ),
+                        if (!active && !observation.quiet)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Waiting for fresh activity',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.amber),
+                            ),
+                          ),
                         if (active) ...[
                           const SizedBox(height: 14),
                           for (final agent in agents)
@@ -310,16 +330,18 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'BRIDGE CHATS · ${agents.length} visible',
+                          '${source.toUpperCase()} CHATS · ${agents.length} visible',
                           style: const TextStyle(
                             color: muted,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 1,
                           ),
                         ),
-                        const Text(
-                          'Only chats visible to the bridge are shown.',
-                          style: TextStyle(color: muted, fontSize: 12),
+                        Text(
+                          bridge.readOnly
+                              ? 'Read-only Agent Deck snapshot of Codex and T3 Code.'
+                              : 'Only chats visible to the bridge are shown.',
+                          style: const TextStyle(color: muted, fontSize: 12),
                         ),
                         if (!active && agents.isNotEmpty) ...[
                           const SizedBox(height: 10),
@@ -337,9 +359,11 @@ class _StandaloneDisplayState extends State<StandaloneDisplay>
                             ),
                           ),
                         const SizedBox(height: 12),
-                        const Text(
-                          'Codex account quota · local clock · read-only',
-                          style: TextStyle(color: muted, fontSize: 11),
+                        Text(
+                          bridge.readOnly
+                              ? 'Read-only Agent Deck source · local clock'
+                              : 'Codex account quota · local clock · read-only',
+                          style: const TextStyle(color: muted, fontSize: 11),
                         ),
                       ],
                     ),
