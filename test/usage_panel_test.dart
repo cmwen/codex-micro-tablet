@@ -53,7 +53,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('standalone emphasizes remaining while keeping used progress', (
+  testWidgets('standalone quota text and bar both represent remaining', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -75,9 +75,9 @@ void main() {
           find.byType(LinearProgressIndicator),
         )
         .toList();
-    expect(progress.first.value, 0.29);
-    expect(progress.first.semanticsLabel, '5-hour usage: 29 percent used');
-    expect(progress.last.semanticsLabel, 'Weekly usage: unavailable');
+    expect(progress.first.value, 0.71);
+    expect(progress.first.semanticsLabel, '5-hour usage: 71 percent remaining');
+    expect(progress, hasLength(1));
     await tester.pumpWidget(const SizedBox());
   });
 

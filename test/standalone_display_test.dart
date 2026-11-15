@@ -50,13 +50,15 @@ void main() {
     expect(find.text('0% used'), findsOneWidget);
     expect(find.text('100% remaining'), findsOneWidget);
     expect(find.text('Usage unavailable'), findsOneWidget);
+    expect(find.text('Chat activity'), findsOneWidget);
+    expect(find.text('All agents idle'), findsNothing);
     expect(
       tester
           .widgetList<LinearProgressIndicator>(
             find.byType(LinearProgressIndicator),
           )
           .map((bar) => bar.semanticsLabel),
-      ['5-hour usage: 0 percent used', 'Weekly usage: unavailable'],
+      ['5-hour usage: 100 percent remaining'],
     );
     await tester.pumpWidget(const SizedBox());
     hid.dispose();
@@ -74,7 +76,8 @@ void main() {
       final bridge = MonitorBridge()
         ..baseUrl = 'http://localhost:1234'
         ..status = 'Connected'
-        ..lastUpdated = DateTime(2026)
+        ..connected = true
+        ..lastUpdated = DateTime.now()
         ..snapshot = {
           'codex': {
             'usage': {
@@ -98,11 +101,12 @@ void main() {
             find.byType(LinearProgressIndicator),
           )
           .toList();
-      expect(bars.map((bar) => bar.value), [0.25, 0.5]);
+      expect(bars.map((bar) => bar.value), [0.75, 0.5]);
       expect(find.text('Reset time unavailable'), findsNWidgets(2));
       expect(find.byTooltip('Refresh usage'), findsNothing);
       expect(find.byTooltip('Usage bridge settings'), findsNothing);
       expect(find.text('Build app'), findsOneWidget);
+      expect(find.text('1 running · visible chats'), findsWidgets);
       expect(find.byTooltip('Connection settings'), findsNothing);
       expect(
         tester
@@ -140,7 +144,7 @@ void main() {
       await tester.tap(find.byTooltip('Standalone display'));
       await tester.pumpAndSettle();
       expect(hid.stopped, 1);
-      expect(find.text('CODEX MONITOR'), findsOneWidget);
+      expect(find.text('Agent Control'), findsOneWidget);
       await tester.tap(find.byTooltip('Exit standalone display'));
       await tester.pumpAndSettle();
       expect(hid.initialized, 1);

@@ -150,7 +150,8 @@ class LandscapeDashboard extends StatelessWidget {
   Widget _agents() => Container(
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: panel,
+      color: const Color(0xff091a35),
+      border: Border.all(color: const Color(0xff355a91)),
       borderRadius: BorderRadius.circular(14),
     ),
     child: Column(
@@ -171,7 +172,7 @@ class LandscapeDashboard extends StatelessWidget {
               ),
             ),
             Text(
-              '${agents.length} chats',
+              '${agents.where((a) => a['status'] == 'running' || a['status'] == 'working').length} running · ${agents.length} visible',
               style: const TextStyle(color: muted, fontSize: 11),
             ),
           ],
@@ -191,7 +192,7 @@ class LandscapeDashboard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         bridge.connected
-                            ? 'All quiet. Ready for your next idea.'
+                            ? 'No visible chats in the latest snapshot.'
                             : 'Connect your monitor bridge',
                         textAlign: TextAlign.center,
                       ),

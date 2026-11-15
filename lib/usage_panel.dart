@@ -52,8 +52,9 @@ class _UsagePanelState extends State<UsagePanel> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xff1b2a30),
+        color: const Color(0xff091a35),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xff355a91)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -146,7 +147,7 @@ class _UsagePanelState extends State<UsagePanel> {
   Widget _compact(BuildContext context, DateTime now) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     decoration: BoxDecoration(
-      color: const Color(0xff1b2a30),
+      color: const Color(0xff091a35),
       borderRadius: BorderRadius.circular(14),
     ),
     child: Column(
@@ -343,6 +344,11 @@ class _UsagePanelState extends State<UsagePanel> {
               : '${used.round()}% used',
           style: TextStyle(
             fontSize: widget.readOnly ? 32 : 25,
+            color: widget.readOnly
+                ? (name.startsWith('Weekly')
+                      ? const Color(0xff99a8ff)
+                      : const Color(0xff31e8ec))
+                : null,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -355,16 +361,20 @@ class _UsagePanelState extends State<UsagePanel> {
           style: const TextStyle(color: Color(0xffa5b4b5), fontSize: 12),
         ),
         const SizedBox(height: 10),
-        LinearProgressIndicator(
-          value: (used ?? 0) / 100,
-          semanticsLabel:
-              '$name: ${used == null ? 'unavailable' : '${used.round()} percent used'}',
-          color: used != null && used >= 90
-              ? Colors.orangeAccent
-              : const Color(0xff86dbc7),
-          backgroundColor: Colors.white10,
-          borderRadius: BorderRadius.circular(4),
-        ),
+        if (used != null)
+          LinearProgressIndicator(
+            value: widget.readOnly ? (100 - used) / 100 : used / 100,
+            semanticsLabel: widget.readOnly
+                ? '$name: ${(100 - used).round()} percent remaining'
+                : '$name: ${used.round()} percent used',
+            color: used >= 90
+                ? Colors.orangeAccent
+                : widget.readOnly && name.startsWith('Weekly')
+                ? const Color(0xff99a8ff)
+                : const Color(0xff14dce5),
+            backgroundColor: Colors.white10,
+            borderRadius: BorderRadius.circular(4),
+          ),
         const SizedBox(height: 10),
         Text(countdown, style: const TextStyle(fontSize: 12)),
         if (reset != null) ...[
