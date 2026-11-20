@@ -58,7 +58,10 @@ void main() {
             find.byType(LinearProgressIndicator),
           )
           .map((bar) => bar.semanticsLabel),
-      ['5-hour usage: 100 percent remaining'],
+      [
+        '5-hour usage: progress toward reset',
+        'Weekly usage: progress toward reset',
+      ],
     );
     await tester.pumpWidget(const SizedBox());
     hid.dispose();
@@ -101,7 +104,11 @@ void main() {
             find.byType(LinearProgressIndicator),
           )
           .toList();
-      expect(bars.map((bar) => bar.value), [0.75, 0.5]);
+      expect(bars.map((bar) => bar.value), [0, 0]);
+      expect(bars.map((bar) => bar.semanticsValue), [
+        'Reset time unavailable',
+        'Reset time unavailable',
+      ]);
       expect(find.text('Reset time unavailable'), findsNWidgets(2));
       expect(find.byTooltip('Refresh usage'), findsNothing);
       expect(find.byTooltip('Usage bridge settings'), findsNothing);

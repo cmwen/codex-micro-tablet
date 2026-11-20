@@ -28,6 +28,14 @@ class UsagePanel extends StatefulWidget {
   State<UsagePanel> createState() => _UsagePanelState();
 }
 
+// Fixed account windows: elapsed time is independent of allowance consumed.
+// Keep an elapsed reset full until the source supplies the next timestamp.
+double? resetProgress(DateTime? reset, DateTime now, Duration window) {
+  if (reset == null || window <= Duration.zero) return null;
+  return (1 - reset.difference(now).inMilliseconds / window.inMilliseconds)
+      .clamp(0.0, 1.0);
+}
+
 class _UsagePanelState extends State<UsagePanel> {
   Timer? _clock;
 
@@ -188,6 +196,7 @@ class _UsagePanelState extends State<UsagePanel> {
             Expanded(
               child: _compactWindow(
                 '5H LEFT',
+                const Duration(hours: 5),
                 widget.usage?['five_hour'] as Map?,
                 const Color(0xff00cdeb),
                 now,
@@ -197,6 +206,7 @@ class _UsagePanelState extends State<UsagePanel> {
             Expanded(
               child: _compactWindow(
                 'WEEK LEFT',
+                const Duration(days: 7),
                 widget.usage?['weekly'] as Map?,
                 const Color(0xff20e6ac),
                 now,
@@ -215,7 +225,13 @@ class _UsagePanelState extends State<UsagePanel> {
     ),
   );
 
-  Widget _compactWindow(String label, Map? bucket, Color color, DateTime now) {
+  Widget _compactWindow(
+    String label,
+    Duration window,
+    Map? bucket,
+    Color color,
+    DateTime now,
+  ) {
     final raw = bucket?['used_percent'];
     final remaining = raw is num && raw.isFinite && raw >= 0 && raw <= 100
         ? 100 - raw.toDouble()
@@ -231,6 +247,7 @@ class _UsagePanelState extends State<UsagePanel> {
             isUtc: true,
           )
         : null;
+    final progress = resetProgress(reset, now, window);
     final minutes = reset == null
         ? null
         : (reset.difference(now).inMilliseconds / 60000).ceil();
@@ -265,23 +282,15 @@ class _UsagePanelState extends State<UsagePanel> {
           ],
         ),
         const SizedBox(height: 4),
-        Semantics(
-          label:
-              '$label: ${remaining == null ? "unavailable" : "${remaining.round()} percent remaining"}',
-          child: Row(
-            children: List.generate(
-              10,
-              (index) => Expanded(
-                child: Container(
-                  height: 9,
-                  margin: const EdgeInsets.only(right: 3),
-                  color: remaining != null && remaining > index * 10
-                      ? color
-                      : Colors.white10,
-                ),
-              ),
-            ),
-          ),
+        LinearProgressIndicator(
+          value: progress ?? 0,
+          minHeight: 9,
+          color: progress == null ? Colors.transparent : color,
+          backgroundColor: Colors.white10,
+          semanticsLabel: '$label: progress toward reset',
+          semanticsValue: progress == null
+              ? 'Reset time unavailable'
+              : '${(progress * 100).round()} percent elapsed',
         ),
         const SizedBox(height: 5),
         Text(
@@ -315,6 +324,13 @@ class _UsagePanelState extends State<UsagePanel> {
             isUtc: true,
           ).toLocal()
         : null;
+    final progress = resetProgress(
+      reset,
+      now,
+      name.startsWith('Weekly')
+          ? const Duration(days: 7)
+          : const Duration(hours: 5),
+    );
     final locale = MaterialLocalizations.of(context);
     final duration = reset?.difference(now);
     final String countdown;
@@ -361,20 +377,25 @@ class _UsagePanelState extends State<UsagePanel> {
           style: const TextStyle(color: Color(0xffa5b4b5), fontSize: 12),
         ),
         const SizedBox(height: 10),
-        if (used != null)
-          LinearProgressIndicator(
-            value: widget.readOnly ? (100 - used) / 100 : used / 100,
-            semanticsLabel: widget.readOnly
-                ? '$name: ${(100 - used).round()} percent remaining'
-                : '$name: ${used.round()} percent used',
-            color: used >= 90
-                ? Colors.orangeAccent
-                : widget.readOnly && name.startsWith('Weekly')
-                ? const Color(0xff99a8ff)
-                : const Color(0xff14dce5),
-            backgroundColor: Colors.white10,
-            borderRadius: BorderRadius.circular(4),
-          ),
+        LinearProgressIndicator(
+          value: progress ?? 0,
+          semanticsLabel: '$name: progress toward reset',
+          semanticsValue: progress == null
+              ? 'Reset time unavailable'
+              : '${(progress * 100).round()} percent elapsed',
+          color: progress == null
+              ? Colors.transparent
+              : name.startsWith('Weekly')
+              ? const Color(0xff99a8ff)
+              : const Color(0xff14dce5),
+          backgroundColor: Colors.white10,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Progress toward reset',
+          style: TextStyle(color: Color(0xffa5b4b5), fontSize: 10),
+        ),
         const SizedBox(height: 10),
         Text(countdown, style: const TextStyle(fontSize: 12)),
         if (reset != null) ...[

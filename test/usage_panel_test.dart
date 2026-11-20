@@ -28,6 +28,26 @@ void main() {
     ),
   );
 
+  test(
+    'reset progress is time based and clamps without inventing a new window',
+    () {
+      const week = Duration(days: 7);
+      expect(resetProgress(now.add(week), now, week), 0);
+      expect(resetProgress(now.add(const Duration(hours: 84)), now, week), 0.5);
+      expect(
+        resetProgress(now.add(const Duration(hours: 1)), now, week),
+        closeTo(167 / 168, 0.000001),
+      );
+      expect(resetProgress(now, now, week), 1);
+      expect(
+        resetProgress(now.subtract(const Duration(hours: 1)), now, week),
+        1,
+      );
+      expect(resetProgress(now.add(const Duration(days: 8)), now, week), 0);
+      expect(resetProgress(null, now, week), isNull);
+    },
+  );
+
   testWidgets('usage shows both windows and exact local resets', (
     tester,
   ) async {
@@ -53,7 +73,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('standalone quota text and bar both represent remaining', (
+  testWidgets('standalone number is allowance but bar is time toward reset', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -75,9 +95,14 @@ void main() {
           find.byType(LinearProgressIndicator),
         )
         .toList();
-    expect(progress.first.value, 0.71);
-    expect(progress.first.semanticsLabel, '5-hour usage: 71 percent remaining');
-    expect(progress, hasLength(1));
+    expect(progress.first.value, closeTo(0.6, 0.00001));
+    expect(
+      progress.first.semanticsLabel,
+      '5-hour usage: progress toward reset',
+    );
+    expect(progress.first.semanticsValue, '60 percent elapsed');
+    expect(progress.last.semanticsValue, 'Reset time unavailable');
+    expect(progress, hasLength(2));
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -120,9 +145,22 @@ void main() {
       ),
     );
     expect(find.text('Resets in 2m'), findsOneWidget);
+    final before = tester
+        .widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator).first,
+        )
+        .value!;
     clock = now.add(const Duration(minutes: 1));
     await tester.pump(const Duration(seconds: 30));
     expect(find.text('Resets in 1m'), findsOneWidget);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator).first,
+          )
+          .value!,
+      greaterThan(before),
+    );
     await tester.pumpWidget(const SizedBox());
   });
 
