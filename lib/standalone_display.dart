@@ -23,6 +23,11 @@ class MonitorObservation {
     final age = bridge.lastUpdated == null
         ? null
         : now.difference(bridge.lastUpdated!);
+    final hasLiveActivity =
+        bridge.connected ||
+        (bridge.readOnly &&
+            bridge.snapshot?['integration'] == 'degraded' &&
+            agents.isNotEmpty);
     const known = {
       'running',
       'working',
@@ -42,7 +47,7 @@ class MonitorObservation {
           )
           .length,
       fresh:
-          bridge.connected &&
+          hasLiveActivity &&
           bridge.snapshot != null &&
           age != null &&
           age >= const Duration(seconds: -5) &&

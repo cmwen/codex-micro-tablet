@@ -1,3 +1,4 @@
+import 'package:codex_micro_tablet/agent_deck_snapshot.dart';
 import 'package:codex_micro_tablet/bridge_client.dart';
 import 'package:codex_micro_tablet/hid_service.dart';
 import 'package:codex_micro_tablet/main.dart';
@@ -63,6 +64,48 @@ void main() {
         'Weekly usage: progress toward reset',
       ],
     );
+    await tester.pumpWidget(const SizedBox());
+    hid.dispose();
+    bridge.dispose();
+  });
+
+  testWidgets('a partial Agent Deck snapshot still shows live Mac activity', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'standalone_display': true});
+    final hid = MonitorHid();
+    final bridge = MonitorBridge()
+      ..kind = MonitorSourceKind.agentDeck
+      ..baseUrl = 'https://deck.example.test'
+      ..lastUpdated = DateTime.now()
+      ..error = 'Agent Deck reports limited observation.'
+      ..snapshot = normalizeAgentDeckSnapshot({
+        'integration': 'degraded',
+        'harnesses': [
+          {
+            'id': 'codex',
+            'integration': 'degraded',
+            'agents': [
+              {
+                'id': 'codex:companion:sample',
+                'name': 'Codex session 037a2d82',
+                'status': 'running',
+                'detail': 'Desktop companion · test-mac',
+              },
+            ],
+          },
+          {'id': 't3code', 'integration': 'unavailable', 'agents': []},
+        ],
+      });
+    await tester.pumpWidget(MicroTabletApp(hid: hid, bridge: bridge));
+    await tester.pumpAndSettle();
+    expect(find.text('1 running · visible chats'), findsWidgets);
+    expect(find.text('Codex session 037a2d82'), findsOneWidget);
+    expect(
+      find.text('Agent Deck reports limited observation.'),
+      findsOneWidget,
+    );
+    expect(find.text('Activity stale or unavailable'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     hid.dispose();
     bridge.dispose();

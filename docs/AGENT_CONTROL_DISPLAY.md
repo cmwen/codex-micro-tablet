@@ -61,3 +61,9 @@ installed app only. Choosing either source changes display data only; HID transp
 mappings, approvals and host microphone gestures keep their existing behavior. The
 ambient clock is compact (local hour/minute beside a short date) so quota and source
 detail keep the available height.
+
+
+When Agent Deck receives a desktop companion feed, its sessions appear under Codex
+through the same HTTPS snapshot. Standalone mode shows running sessions from a
+fresh partial snapshot with the source warning, including when another harness is
+unavailable. Only the visible sessions contribute to the displayed running count.
